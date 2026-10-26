@@ -218,7 +218,7 @@ def measure(text, size, width, light=False, upper=False, spacing=1.2):
     for para in re.split(r"<br\s*/?>|\n", str(text)):
         para = typo(plain(para))  # те же неразрывные пробелы, что попадут в слайд
         if upper:
-            para = para.upper()
+            para = upper_keep(para)
         words = para.split(" ")
         cur = ""
         n = 1
@@ -250,11 +250,20 @@ def typo(s):
     return re.sub(r"\s+—", " —", s)
 
 
+def upper_keep(s):
+    """Прописные для заголовков; текст в <k>…</k> сохраняет регистр (аббревиатуры вроде «ШОиФД»)."""
+    out = []
+    for m in re.finditer(r"<k>(.*?)</k>|(<[^>]+>)|([^<]+)", s):
+        out.append(m.group(1) if m.group(1) is not None else (m.group(2) or m.group(3).upper()))
+    return "".join(out)
+
+
 def runs(text):
     """Разбор мини-разметки: <b>…</b> — акцентный цвет, <g>…</g> — серый, \\n или <br> — новая строка."""
     out = []
     for para in re.split(r"<br\s*/?>|\n", str(text)):
         parts = []
+        para = re.sub(r"</?k>", "", para)
         for m in re.finditer(r"<(b|g)>(.*?)</\1>|([^<]+)", para):
             if m.group(3) is not None:
                 parts.append((typo(plain(m.group(3))), None))
@@ -269,7 +278,7 @@ def text(slide, x, y, w, h, s, size=32, color=TEXT, light=False, upper=False, al
     """Текстовый блок. Если текст не влезает — уменьшает кегль до min_size и пишет в отчёт."""
     s = "" if s is None else str(s)
     if upper:
-        s = re.sub(r"(<[^>]+>)|([^<]+)", lambda m: m.group(1) or m.group(2).upper(), s)
+        s = upper_keep(s)
     sz = size
     while sz > min_size and measure(s, sz, w, light, spacing=spacing)[1] > h + 1:
         sz -= 1
@@ -375,6 +384,13 @@ def light_slide(prs, s, where, n):
     sl = prs.slides.add_slide(prs.slide_layouts[6])
     logo_right(sl)
     top = title(sl, s, where) if s.get("title") else 217
+    if s.get("lead"):
+        # Лид — вывод слайда одним-двумя предложениями под коротким заголовком; <g>…</g> — серое уточнение
+        lines, hgt = measure(s["lead"], 36, 1800)
+        hgt = min(hgt, 36 * 1.2 * 3)
+        text(sl, 60, top - 10, 1800, hgt + 4, s["lead"], size=36, color=BLACK, min_size=28,
+             where=where + " лид")
+        top = int(top - 10 + hgt + 40)
     page_no(sl, n)
     return sl, top
 
@@ -1019,6 +1035,41 @@ def L_contacts(prs, s, n, where):
     return sl
 
 
+def L_speakers(prs, s, n, where):
+    """Спикеры: сетка карточек — фото (или серая заглушка с иконкой), имя, должность."""
+    sl, top = light_slide(prs, s, where, n)
+    items = s["items"]
+    k = len(items)
+    cols = s.get("columns") or (k if k <= 4 else 3 if k in (5, 6, 9) else 4)
+    rows = (k + cols - 1) // cols
+    g = 20
+    cw = (1800 - g * (cols - 1)) / cols
+    ch = (1000 - top - g * (rows - 1)) / rows
+    side = cols >= 3 and rows >= 2  # мало места по высоте — фото слева, текст справа
+    for i, it in enumerate(items):
+        x = 60 + (i % cols) * (cw + g)
+        y = top + (i // cols) * (ch + g)
+        rect(sl, x, y, cw, ch, CARD, radius=12)
+        if side:
+            pw, ph, px, py = min(ch, cw * 0.42), ch, x, y
+            tx, ty, tw = x + pw + 30, y + 30, cw - pw - 50
+        else:
+            pw, ph, px, py = cw, ch * 0.62, x, y
+            tx, ty, tw = x + 30, y + ph + 24, cw - 60
+        if it.get("photo"):
+            picture(sl, asset("photo", it["photo"]), px, py, pw, ph, cover=True, radius=12)
+        else:
+            rect(sl, px, py, pw, ph, CARD_HEAD, radius=12)
+            icon_pic(sl, "people", px + pw / 2 - 40, py + ph / 2 - 40, 80)
+        th = (y + ch - 24) - ty
+        text(sl, tx, ty, tw, min(90, th * 0.45), it["name"], size=32, color=BLACK, min_size=22,
+             where=f"{where} спикер {i + 1}")
+        if it.get("role"):
+            text(sl, tx, ty + min(90, th * 0.45) + 8, tw, th - min(90, th * 0.45) - 8, it["role"], size=22,
+                 color=TEXT, min_size=16, where=f"{where} спикер {i + 1}")
+    return sl
+
+
 def L_image(prs, s, n, where):
     """Фото во всю рабочую область с заголовком."""
     sl, top = light_slide(prs, s, where, n)
@@ -1044,6 +1095,9 @@ def build(deck, base, out):
         if lay not in LAYOUTS:
             sys.exit(f"Слайд {i}: неизвестный макет «{lay}». Доступны: {', '.join(sorted(LAYOUTS))}")
         sl = LAYOUTS[lay](prs, s, i, f"Слайд {i} ({lay})")
+        if s.get("footnote"):
+            y = 1040 if s.get("source") else 1010
+            text(sl, 60, y, 1640, 34, s["footnote"], size=16, color=GREY, min_size=16, where=f"Слайд {i} сноска")
         if s.get("notes"):
             sl.notes_slide.notes_text_frame.text = s["notes"]
     prs.core_properties.title = deck.get("title", "")
