@@ -1,63 +1,67 @@
 # Макеты и формат deck.json
 
-## Структура файла
-
 ```json
 {
-  "title": "Название презентации (метаданные PDF/PPTX)",
-  "kicker": "Кикер по умолчанию — левый верх каждого слайда",
-  "footer": "Подвал по умолчанию — левый низ",
-  "slides": [ { "layout": "cover", "...": "..." } ]
+  "title": "Название файла (метаданные PPTX)",
+  "direction": "vtb",
+  "slides": [ { "layout": "title", "...": "..." } ]
 }
 ```
 
-Общие поля любого слайда: `kicker`, `footer` (переопределяют общие), `notes` (заметки докладчика → PPTX),
-`hide_page` (скрыть номер). В текстовых полях допустим инлайн-HTML: `<b>`, `<br>`, `&nbsp;`.
-Пути к картинкам — относительно deck.json.
+`direction` задаёт палитру, фон-паттерн и портрет по умолчанию: `vtb | family | prof | china | b2b | infra |
+private | privilege` (см. `brand.md`).
 
-Поля, общие для светлых макетов: `title`, `lead`, `thesis` + `thesis_label` (градиентная карточка внизу),
-`source` (строка «Источник: …» внизу).
+Поля, общие для всех слайдов: `notes` — заметки докладчика. У светлых слайдов есть `title` и необязательный
+`title_grey` (серая часть заголовка).
 
-## Каталог
+Разметка в тексте: `<b>…</b>` — акцентный цвет, `<g>…</g>` — серый, `\n` — новая строка.
+Неразрывные пробелы после коротких слов и перед тире скрипт ставит сам.
 
-| layout | Фон | Обязательные поля | Необязательные | Лимиты, чтобы влезло |
+Ресурсы указываются **по имени** из `references/assets.md` (`"photo": "speaker"`, `"icon": "bank"`,
+`"portrait": "vtb"`) или **путём к своему файлу** относительно deck.json (`"photo": "img/team.jpg"`).
+
+## Каталог (номер — страница мастер-шаблона)
+
+| layout | Стр. | Обязательные поля | Необязательные | Сколько влезает |
 |---|---|---|---|---|
-| `cover` | тёмный | `title` | `subtitle`, `meta[]` (чипы) | заголовок ≤ 70 знаков, 2–4 чипа |
-| `section` | тёмный | `title` | `num` ("01"), `subtitle` | заголовок ≤ 45 знаков |
-| `agenda` | светлый | `title`, `items[]` (строка или `{title,text}`) | — | 2–8 пунктов |
-| `text` | светлый | `title` | `lead`, `text` (строка или массив), `thesis`, `source` | ≤ 90 слов на слайд |
-| `bullets` | светлый | `title`, `items[]` | `lead`, `side{label,text}`, `thesis`, `source` | 3–6 пунктов по ≤ 12 слов |
-| `cards` | светлый (`dark: true` — тёмный) | `title`, `items[{title,text,num?,highlight?}]` | `columns`, `numbered:false`, `thesis` | 2–4 в ряд (6 = 3×2), текст ≤ 25 слов |
-| `stats` | светлый (`dark: true`) | `title`, `items[{value,unit?,label}]` | `lead`, `thesis`, `source` | 2–4 числа, `value` ≤ 5 знаков |
-| `process` | светлый | `title`, `items[{title,text}]` | `highlight_last:false`, `thesis` | 3–5 шагов, текст ≤ 15 слов |
-| `compare` | светлый | `title`, `columns[2]{title,items[],highlight?}` | `lead`, `thesis` | ≤ 6 пунктов в колонке |
-| `table` | светлый | `title`, `headers[]`, `rows[][]` | `align[]` ("right" для чисел), `highlight[[r,c]]`, `source` | ≤ 7 строк × 5 колонок |
-| `chart` | светлый | `title`, `items[{label,value,highlight?,display?}]` | `max`, `unit`, `lead`, `source` | 3–8 столбцов |
-| `image` | светлый | `title`, `image` | `image_side` (left/right), `text`, `items[]`, `thesis` | ≤ 50 слов |
-| `person` | светлый | `name` | `photo`, `role`, `label` ("Лектор"), `text`, `items[]` | фото ≥ 520×700 px |
-| `quote` | тёмный | `text` | `author`, `role`, `photo` | ≤ 30 слов |
-| `closing` | тёмный | — | `title` ("Спасибо!"), `subtitle`, `button`, `contacts[{label,value}]` | ≤ 4 контакта |
+| `title` | 9, 10, 12 | `title` | `variant` (`photo` · `plain` · `split`), `portrait`, `subtitle`, `meta` (справа вверху, 2 строки), `date`, `background`, `partner_logo` | заголовок 2–3 строки, до ~40 знаков |
+| `section` | 13, 14 | `title` | `num` («01»), `photo` (вместо паттерна), `subtitle`, `date`, `partner_logo` | 2–3 строки |
+| `toc` | 15 | `items[{title, page?}]` | `title` («Содержание») | до 9 пунктов |
+| `bullets` | 16–18 | `items[]` (строка или `{text, icon}`) | `numbered: false`, `conclusion` (итог на плашке второго цвета) | 3–5 строк по 1–3 строки текста |
+| `cards` | 19–24 | `items[{title, text \| items[], icon?, photo?, numbered?}]` | `highlight` (индекс карточки с градиентом) | 2–4 карточки; с фото текст до ~25 слов |
+| `process` | 25 | `items[{title, text, label?}]` | `result: false` (не выделять последний шаг) | 3–5 шагов |
+| `highlights` | 29–31 | `items[{value \| icon, unit?, text, highlight?}]` | `columns` | 4–8 ячеек, текст до 20 слов |
+| `stats` | 29 | `items[{value, unit?, text}]` | `note`, `source` | 2–4 цифры (значение до 5 знаков) |
+| `photo_text` | 34, 35 | `photo`, `items[]` (строка или `{text, icon}`) | `label` (шапка карточки), `photo_side: left` | 3–5 пунктов |
+| `menu_photo` | 28 | `photo`, `items[{title, text, icon?, highlight?}]` | — | 3–5 пунктов (последний выделен) |
+| `table` | 36–38 | `headers[]`, `rows[][]` | `widths[]` (px, сумма 1800 или 1435 с `side`), `align[]` (`l`·`c`·`r`), `highlight_rows[]`, `side{value, text}`, `note`, `source` | до 10 строк × 7 колонок |
+| `chart` | 43, 44 | `charts[{title, type, categories[], series[{name, values[]}]}]` | у графика: `icon`, `min`, `max`, `step`, `labels: false`, `format`; у слайда: `note`, `note_title`, `note_icon`, `source` | 1–2 графика; `type`: `bar` · `stacked` · `hbar` · `line` · `donut` · `pie` |
+| `timeline` | 48 | `items[{label, text}]` | — | 3–7 точек |
+| `scheme` | 39 | `items[{title, text, num? \| icon?, highlight?}]` | `top[{title, text}]` (1–2 верхних блока), `bottom` (итоговая плашка) | 2–4 элемента |
+| `contacts` | 49 | `people[{name, role, phone, email, qr?, qr_caption?}]` | `title` («Контакты») | 1–3 человека |
+| `image` | 62 | `photo` | — | одно фото |
 
-## Как выбирать макет
+Графики — родные диаграммы PowerPoint: данные правятся двойным щелчком (откроется таблица Excel).
+Таблицы — родные таблицы PowerPoint.
 
-| Содержание | Макет |
+## Как выбрать макет
+
+| Задача слайда | Макет |
 |---|---|
-| Начало / конец | `cover` / `closing` |
-| Переход между частями (> 8 слайдов) | `section` |
-| План встречи, программа | `agenda` |
-| Одна мысль + пояснение | `text` с `thesis` |
-| Перечень без иерархии | `bullets` (с `side`, если есть вывод) |
-| 2–4 равноправных объекта | `cards` |
-| Ключевые числа | `stats` (с `source` обязательно) |
-| Последовательность, алгоритм | `process` |
-| До/после, вариант А/Б | `compare` |
+| Открыть презентацию | `title` (`photo` — с портретом направления; `split` — с партнёром; `plain` — без людей) |
+| Обозначить новый блок | `section` |
+| Показать план | `toc` |
+| Перечислить 3–5 тезисов | `bullets` (`conclusion` — если есть вывод) |
+| Сравнить 2–4 объекта или направления | `cards` |
+| Показать последовательность | `process` или `timeline` (если важны даты) |
+| Показать ключевые числа | `stats` (2–4) или `highlights` (4–8) |
+| Рассказать про людей или формат с картинкой | `photo_text`, `menu_photo`, `image` |
 | Точные значения по нескольким признакам | `table` |
-| Сравнение величин одного ряда | `chart` |
-| Лектор, эксперт | `person` |
-| Сильная формулировка | `quote` |
+| Динамика, структура, доли | `chart` |
+| Связи и иерархия | `scheme` |
+| Закрыть презентацию | `contacts` |
 
-## Отчёт о переполнении
-
-`report.json` и вывод скрипта: `ПЕРЕПОЛНЕНИЕ` — содержимое вышло за рабочую область (top 168 … bottom 128).
-Код выхода 2. Исправление: сократить текст, разбить слайд на два, уменьшить число карточек/строк.
-Уменьшать кегль вручную нельзя — шкала зафиксирована в `brand.md`.
+## Проверка текста
+Скрипт оценивает переносы по метрикам Open Sans. Если текст не помещается, кегль снижается до минимума макета,
+и об этом появляется запись в `report.json`. Если текст не влезает и на минимуме, пишется `ПЕРЕПОЛНЕНИЕ`, а код
+выхода — 2. Тогда нужно сократить текст или разбить слайд. Уменьшать кегли в коде нельзя: шкала задана гайдом.
