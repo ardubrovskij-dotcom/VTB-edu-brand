@@ -19,7 +19,7 @@ from pptx.dml.color import RGBColor
 from pptx.util import Pt, Emu
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from layouts import LAYOUTS, DIRECTIONS  # noqa: E402
+from layouts import LAYOUTS, DIRECTIONS, PEOPLE  # noqa: E402
 
 SKILL = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ASSETS = os.path.join(SKILL, 'assets')
@@ -226,6 +226,17 @@ def asset(kind, name, exts=('.png', '.jpg', '.jpeg')):
         if os.path.isfile(p):
             return p
     return None
+
+
+def person_key(name):
+    """Портрет: ключ (artyom), русское имя (Артём) или направление (prof) → имя файла в assets/people."""
+    if not isinstance(name, str):
+        return name
+    low = name.strip().lower().replace('ё', 'е')
+    for key, (ru, _, direction) in PEOPLE.items():
+        if low in (key, ru.lower().replace('ё', 'е'), direction):
+            return key
+    return name
 
 
 # ---------------------------------------------------------------- текст и подбор кегля
@@ -686,7 +697,7 @@ def fill_slide(prs, slide, spec, s, ctx, where):
             if p is False:
                 delete(pic)
             else:
-                path = asset('people', p)
+                path = asset('people', person_key(p))
                 if path:
                     put_image(slide, pic, path, focus=(0.5, 0.0))
                 else:
@@ -912,6 +923,13 @@ def preview(pptx, out_dir):
         print('превью:', pdf, 'и slide-*.png')
 
 
+def list_people():
+    print('Портреты для обложек ("portrait"):')
+    for key, (ru, who, direction) in PEOPLE.items():
+        d = f'по умолчанию для {direction}' if direction else 'без направления'
+        print(f'  {key:<8} {ru:<8} {who} — {d}')
+
+
 def list_icons(template):
     lib = build_library(Presentation(template))
     icons = sorted(k for k in lib if not k.startswith('ill-'))
@@ -927,7 +945,10 @@ def main():
     ap.add_argument('--template', default=os.path.join(ASSETS, 'template.pptx'))
     ap.add_argument('--preview', action='store_true')
     ap.add_argument('--list-icons', action='store_true')
+    ap.add_argument('--list-people', action='store_true')
     a = ap.parse_args()
+    if a.list_people:
+        return list_people()
     if a.list_icons:
         return list_icons(a.template)
     if not a.deck:
