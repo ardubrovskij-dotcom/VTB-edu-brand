@@ -631,7 +631,7 @@ def h_title(slide, s, ctx, where):
     note = [x for x in (s.get('note'), s.get('date')) if x]
     if note:
         col = ACCENT[ctx['dir_no']]
-        tb = text(slide, 42, 454, 330, 34, note, 12.5, INK, pitch=15)
+        tb = text(slide, 41, 473, 330, 34, note, 12.5, INK, pitch=15)  # вровень с синей чертой (правка автора)
         tb.text_frame.paragraphs[0].runs[0].font.color.rgb = RGBColor.from_string(col)
         if len(note) > 1 and s.get('date_muted'):
             tb.text_frame.paragraphs[1].runs[0].font.color.rgb = RGBColor.from_string('ACB6C3')

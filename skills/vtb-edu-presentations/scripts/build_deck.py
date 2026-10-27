@@ -61,7 +61,8 @@ def note_size(role, base, final):
         UNIFORM['shrunk'][role] = min(final, UNIFORM['shrunk'].get(role, final))
 
 
-FONT_MAP = {'VTB Group Book': FONT, 'VTB Group Light': FONT, 'VTB Group': FONT}
+FONT_MAP = {'VTB Group Book': FONT, 'VTB Group Light': FONT, 'VTB Group': FONT,
+            'VTB Group Bold': FONT_DEMI, 'VTB Group Medium': FONT_DEMI, 'VTB Group DemiBold': FONT_DEMI}
 LIGHT_DIRECTIONS = {5, 6}  # b2b, infra: светлые фоны и карточки
 DARK_TEXT = '0E2569'  # тёмный текст мастера «Инфраструктурные проекты»
 
@@ -1008,7 +1009,7 @@ def drop_slide(prs, slide):
 def restyle(prs):
     """Шрифт VTB Group → VTB Omega UI и отказ от прописных (cap="all") во всём пакете: темы, мастера,
     макеты, слайды, диаграммы. Текст набирается так, как написан."""
-    pat = re.compile(rb'typeface="(VTB Group(?: Book| Light)?)"')
+    pat = re.compile(rb'typeface="(VTB Group(?: Book| Light| Bold| Medium| DemiBold)?)"')
     for part in prs.part.package.iter_parts():
         if hasattr(part, '_element'):
             for el in part._element.iter():
@@ -1020,7 +1021,11 @@ def restyle(prs):
                 if el.get('cap') in ('all', 'small'):
                     del el.attrib['cap']
         elif part.content_type.endswith('theme+xml'):
-            part._blob = pat.sub(b'typeface="' + FONT.encode() + b'"', part.blob)
+            blob = pat.sub(b'typeface="' + FONT.encode() + b'"', part.blob)
+            # шрифты темы (заголовки и текст) во всех темах, включая заметки и раздаточные материалы
+            blob = re.sub(rb'(<a:(?:major|minor)Font>\s*<a:latin typeface=")[^"]*(")',
+                          rb'\1' + FONT.encode() + rb'\2', blob)
+            part._blob = blob
 
 
 def build(deck, out_dir, template):
