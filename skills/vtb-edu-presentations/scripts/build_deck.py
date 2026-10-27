@@ -15,6 +15,7 @@ from pptx.chart.data import CategoryChartData
 from pptx.opc.constants import RELATIONSHIP_TYPE as RT
 from pptx.opc.package import PartFactory
 from pptx.opc.packuri import PackURI
+from pptx.oxml import parse_xml
 from pptx.dml.color import RGBColor
 from pptx.util import Pt, Emu
 
@@ -471,7 +472,7 @@ def renumber(slide):
 
 
 # ---------------------------------------------------------------- таблицы и диаграммы
-def fill_table(gf, data, report, where):
+def fill_table(gf, data, report, where, fitter=None):
     tbl = xp(gf._element, './/a:tbl')[0]
     cols = data.get('columns') or []
     rows = data.get('rows') or []
@@ -497,9 +498,13 @@ def fill_table(gf, data, report, where):
     for g in gcols[ncol:]:
         grid.remove(g)
     gcols = gcols[:ncol]
-    first = total_w * (0.3 if ncol > 2 else 0.5)
+    # ширины колонок — по длине текста, но не уже 14 % ширины таблицы
+    lens = [max([len(str(c)) for c in [cols[i] if i < len(cols) else ''] + [r[i] if i < len(r) else '' for r in rows]] + [4])
+            for i in range(ncol)]
+    weights = [max(0.14, l / sum(lens)) for l in lens]
+    weights = [w / sum(weights) for w in weights]
     for i, g in enumerate(gcols):
-        g.set('w', str(int(first if i == 0 else (total_w - first) / max(1, ncol - 1))))
+        g.set('w', str(int(total_w * weights[i])))
         for ext in g.findall('a:extLst', NS):
             g.remove(ext)
     # строки: чередование фона как в прототипе (первые две строки тела)
@@ -524,8 +529,33 @@ def fill_table(gf, data, report, where):
         for tc, v in zip(tr.findall('a:tc', NS), list(r) + [''] * ncol):
             cell_text(tc, v)
         tbl.append(tr)
+    if fitter is not None:
+        fit_table(tbl, gf.height / E, fitter, report, where)
     if nrows > 12:
         report.append(f'{where}: в таблице {nrows} строк — больше 12 плохо читается, разбейте на два слайда')
+
+
+def fit_table(tbl, avail, fitter, report, where, start=16, floor=11):
+    """Подбирает один кегль для всей таблицы так, чтобы строки с переносами уместились в высоту рамки."""
+    widths = [int(g.get('w')) / E for g in tbl.find('a:tblGrid', NS).findall('a:gridCol', NS)]
+    trs = tbl.findall('a:tr', NS)
+    texts = [[''.join(t.text or '' for t in tc.iter('{%s}t' % NS['a'])) for tc in tr.findall('a:tc', NS)] for tr in trs]
+    pad_v, pad_h = 11.4, 22.6  # поля ячейки шаблона: 0,2 см сверху и снизу, 0,4 см по бокам
+    size = start
+    while True:
+        heights = [max([fitter.lines(t, size, max(10, w - pad_h)) * size * 1.2 + pad_v
+                        for t, w in zip(row, widths)] + [0]) for row in texts]
+        if sum(heights) <= avail or size <= floor:
+            break
+        size -= 0.5
+    for tr, h in zip(trs, heights):
+        tr.set('h', str(int(h * E)))
+        for rpr in tr.iter('{%s}rPr' % NS['a'], '{%s}endParaRPr' % NS['a']):
+            rpr.set('sz', str(int(size * 100)))
+    if size < start:
+        report.append(f'{where}: кегль таблицы {start:g} → {size:g} pt')
+    if sum(heights) > avail:
+        report.append(f'{where}: ПЕРЕПОЛНЕНИЕ — таблица выше рамки на {sum(heights) - avail:.0f} pt. Сократите текст или разбейте слайд')
 
 
 def cell_text(tc, value):
@@ -578,7 +608,12 @@ def fill_slide(prs, slide, spec, s, ctx, where):
     # поля
     for name, idx in spec.get('fields', {}).items():
         if s.get(name) not in (None, ''):
-            put(idx, s[name], name, 2 if name == 'title' and spec['proto'] > 14 and spec['proto'] != 52 else None)
+            lines = None
+            if name == 'title' and spec['proto'] > 14 and spec['proto'] != 52:
+                lines = 2
+            elif name.endswith('value'):
+                lines = 1  # крупная цифра не переносится, а уменьшается
+            put(idx, s[name], name, lines)
     # текстовые блоки, которые не плейсхолдеры
     for name, prefix in spec.get('textbox', {}).items():
         sh = find_shape(slide, prefix)
@@ -692,6 +727,8 @@ def fill_slide(prs, slide, spec, s, ctx, where):
     # портрет на обложке
     if spec.get('portrait'):
         pic = find_shape(slide, spec['portrait'])
+        if pic is not None and s.get('portrait', True) is not False:
+            keep_text_off_portrait(slide, pic, fitter, report, where)
         p = s.get('portrait', ctx['direction'])
         if pic is not None:
             if p is False:
@@ -731,12 +768,14 @@ def fill_slide(prs, slide, spec, s, ctx, where):
     # таблица
     if spec.get('table'):
         gf = next((x for x in slide.shapes if x.has_table), None)
-        if gf is not None and s.get('table'):
-            fill_table(gf, s['table'], report, where)
         ob = spec.get('optional_box')
         if ob and not s.get('conclusion') and not s.get('conclusion_title'):
             for sh in [x for x in slide.shapes if center_in(x, ob)]:
                 delete(sh)
+            if gf is not None:  # без плашки-вывода таблица занимает всю высоту до низа контента
+                gf.height = int((500 - gf.top / E) * E)
+        if gf is not None and s.get('table'):
+            fill_table(gf, s['table'], report, where, fitter)
     # диаграммы
     for k, name in enumerate(spec.get('charts', [])):
         gf = find_shape(slide, name)
@@ -752,7 +791,38 @@ def fill_slide(prs, slide, spec, s, ctx, where):
         if sh.placeholder_format.idx not in used and sh.has_text_frame:
             delete(sh)
     if s.get('notes'):
-        slide.notes_slide.notes_text_frame.text = s['notes']
+        set_notes(slide, s['notes'])
+
+
+def keep_text_off_portrait(slide, pic, fitter, report, where):
+    """Подзаголовок обложки не должен уходить под портрет: сужаем поле и даём ему вторую строку."""
+    edge = pic.left / E + 40  # слева у вырезанного портрета прозрачное поле
+    for sh in slide.placeholders:
+        if sh.placeholder_format.type in (1, 3) or not sh.has_text_frame or not sh.text_frame.text.strip():
+            continue
+        x, y, w, h = bbox(sh)
+        if x < edge < x + w and y + h > pic.top / E and y < 300:
+            continue  # поле в верхнем углу (meta) — не трогаем
+        if x < edge < x + w:
+            size = eff_size(sh, slide)
+            sh.left, sh.top, sh.width = int(x * E), int(y * E), int((edge - x - 8) * E)
+            sh.height = int(max(h, size * 2.6) * E)
+            fit(sh, slide, fitter, report, where + '/подзаголовок', 2)
+
+
+def set_notes(slide, text):
+    """Заметки докладчика. В мастере заметок шаблона нет поля текста — добавляем его сами."""
+    ns = slide.notes_slide
+    if ns.notes_text_frame is None:
+        sp = parse_xml(
+            '<p:sp xmlns:p="%s" xmlns:a="%s"><p:nvSpPr><p:cNvPr id="%d" name="Заметки"/>'
+            '<p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr><p:ph type="body" idx="1"/></p:nvPr></p:nvSpPr>'
+            '<p:spPr><a:xfrm><a:off x="685800" y="4400550"/><a:ext cx="5486400" cy="3600450"/></a:xfrm>'
+            '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr>'
+            '<p:txBody><a:bodyPr/><a:lstStyle/><a:p/></p:txBody></p:sp>'
+            % (NS['p'], NS['a'], next_id(ns)))
+        ns.shapes._spTree.append(sp)
+    ns.notes_text_frame.text = text
 
 
 def widen_without_qr(slide, qr_box):
