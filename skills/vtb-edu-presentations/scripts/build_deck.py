@@ -31,6 +31,37 @@ NS = {'a': 'http://schemas.openxmlformats.org/drawingml/2006/main',
       'r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'}
 R_NS = NS['r']
 MIN_PT = 9
+# Шрифт бренда с 2026 г. — VTB Omega UI (Regular, Medium, DemiBold, Bold). VTB Group шаблона заменяется при сборке.
+FONT = 'VTB Omega UI'
+FONT_DEMI = 'VTB Omega UI DemiBold'
+# Единый кегль по колоде: если элемент пришлось уменьшить на одном слайде, тот же элемент (роль) на всех
+# слайдах получает тот же кегль. shrunk — минимальный кегль роли, до которого пришлось уменьшать в этом проходе,
+# caps — потолок кегля роли во втором проходе.
+UNIFORM = {'caps': {}, 'shrunk': {}}
+COVERS = {'cover', 'cover-panel', 'cover-band', 'cover-text', 'cover-diagonal', 'cover-photo', 'section', 'title', 'chapter'}
+
+
+def role_of(where):
+    m = re.search(r'\(([^)]+)\)/([^/]+)$', where)
+    if not m:
+        return None
+    raw = m.group(2)
+    field = re.sub(r'\d+$', '', raw)
+    if field != raw:
+        field = 'элемент:' + field  # title1, text2 — поля карточек, а не заголовок слайда
+    return ('обложка:' if m.group(1) in COVERS else '') + field
+
+
+def capped(role, size):
+    return min(size, UNIFORM['caps'].get(role, size)) if role else size
+
+
+def note_size(role, base, final):
+    if role and final < base - 0.01:
+        UNIFORM['shrunk'][role] = min(final, UNIFORM['shrunk'].get(role, final))
+
+
+FONT_MAP = {'VTB Group Book': FONT, 'VTB Group Light': FONT, 'VTB Group': FONT}
 LIGHT_DIRECTIONS = {5, 6}  # b2b, infra: светлые фоны и карточки
 DARK_TEXT = '0E2569'  # тёмный текст мастера «Инфраструктурные проекты»
 
@@ -250,19 +281,32 @@ class Fitter:
     @staticmethod
     def _find_font():
         try:
-            out = subprocess.run(['fc-match', '-f', '%{file}', 'VTB Group Book'], capture_output=True, text=True).stdout
-            if out and 'vtb' in out.lower():
+            out = subprocess.run(['fc-match', '-f', '%{file}', FONT], capture_output=True, text=True).stdout
+            if out and 'omega' in out.lower():
                 return out
         except FileNotFoundError:
             pass
         return os.path.join(ASSETS, 'fonts', 'OpenSans-Regular.ttf')
 
-    def width(self, text, size):
-        key = round(size * 4)
-        f = self.cache.get(key) or self.cache.setdefault(key, ImageFont.truetype(self.font_path, key * 10))
-        return f.getlength(text) / 40
+    def _demi(self):
+        if not hasattr(self, '_demi_path'):
+            self._demi_path = None
+            try:
+                out = subprocess.run(['fc-match', '-f', '%{file}', FONT_DEMI], capture_output=True, text=True).stdout
+                if out and 'demi' in out.lower():
+                    self._demi_path = out
+            except FileNotFoundError:
+                pass
+        return self._demi_path
 
-    def lines(self, text, size, width, caps=False):
+    def width(self, text, size, bold=False):
+        path = (self._demi() if bold else None) or self.font_path
+        key = (path, round(size * 4))
+        f = self.cache.get(key) or self.cache.setdefault(key, ImageFont.truetype(path, key[1] * 10))
+        w = f.getlength(text) / 40
+        return w * (1.06 if bold and path == self.font_path else 1)
+
+    def lines(self, text, size, width, caps=False, bold=False):
         n = 0
         for para in text.split('\n'):
             para = para.upper() if caps else para
@@ -270,7 +314,7 @@ class Fitter:
             n += 1
             for w in words:
                 t = (cur + ' ' + w).strip()
-                if self.width(t, size) <= width or not cur:
+                if self.width(t, size, bold) <= width or not cur:
                     cur = t
                 else:
                     n += 1
@@ -383,13 +427,23 @@ def fit(sh, slide, fitter, report, where, max_lines=None):
     text = sh.text_frame.text
     if not text.strip() or w <= 0:
         return
-    s = size
+    role = role_of(where)
+    s = capped(role, size)
     while True:
         n = fitter.lines(text, s, w, caps)
+        # самое длинное слово тоже должно влезать: иначе PowerPoint разорвёт его по буквам («0 / 1»)
+        widest = max((fitter.width(word.upper() if caps else word, s) for word in text.split()), default=0)
+        if widest > w:
+            n = max(n, (max_lines or 1) + 1)
         lim = max_lines or max(1, int((h * 1.25) // (s * 1.2)))
-        if n <= lim or s <= max(MIN_PT, size * 0.7):
+        if n <= lim or s <= max(MIN_PT, size * (0.5 if max_lines == 1 else 0.7)):
             break
         s -= 0.5
+    if max_lines == 1:  # однострочное поле: без переноса (номер, год, цифра)
+        bp = sh.text_frame._txBody.find('a:bodyPr', NS)
+        if bp is not None:
+            bp.set('wrap', 'none')
+    note_size(role, size, s)
     if s < size:
         for p in sh.text_frame.paragraphs:
             for r in p.runs:
@@ -542,13 +596,14 @@ def fit_table(tbl, avail, fitter, report, where, start=16, floor=11):
     trs = tbl.findall('a:tr', NS)
     texts = [[''.join(t.text or '' for t in tc.iter('{%s}t' % NS['a'])) for tc in tr.findall('a:tc', NS)] for tr in trs]
     pad_v, pad_h = 11.4, 22.6  # поля ячейки шаблона: 0,2 см сверху и снизу, 0,4 см по бокам
-    size = start
+    size = capped('таблица', start)
     while True:
         heights = [max([fitter.lines(t, size, max(10, w - pad_h)) * size * 1.2 + pad_v
                         for t, w in zip(row, widths)] + [0]) for row in texts]
         if sum(heights) <= avail or size <= floor:
             break
         size -= 0.5
+    note_size('таблица', start, size)
     for tr, h in zip(trs, heights):
         tr.set('h', str(int(h * E)))
         for rpr in tr.iter('{%s}rPr' % NS['a'], '{%s}endParaRPr' % NS['a']):
@@ -663,7 +718,8 @@ def fill_slide(prs, slide, spec, s, ctx, where):
                 if field == 'num' and v is None:
                     v = f'{k + 1:02d}'
                 if v not in (None, ''):
-                    put(it[field], v, f'{field}{k + 1}')
+                    one = field in ('num', 'year', 'label', 'page', 'phone', 'email')  # не переносить, а уменьшать
+                    put(it[field], v, f'{field}{k + 1}', 1 if one else None)
             # цифра: своя ячейка или копия ячейки соседа
             if 'value' in it:
                 if g.get('value') not in (None, ''):
@@ -949,8 +1005,48 @@ def drop_slide(prs, slide):
             return
 
 
+def restyle(prs):
+    """Шрифт VTB Group → VTB Omega UI и отказ от прописных (cap="all") во всём пакете: темы, мастера,
+    макеты, слайды, диаграммы. Текст набирается так, как написан."""
+    pat = re.compile(rb'typeface="(VTB Group(?: Book| Light)?)"')
+    for part in prs.part.package.iter_parts():
+        if hasattr(part, '_element'):
+            for el in part._element.iter():
+                tf = el.get('typeface')
+                if tf in FONT_MAP:
+                    el.set('typeface', FONT_MAP[tf])
+                    for a in ('panose', 'pitchFamily', 'charset'):
+                        el.attrib.pop(a, None)
+                if el.get('cap') in ('all', 'small'):
+                    del el.attrib['cap']
+        elif part.content_type.endswith('theme+xml'):
+            part._blob = pat.sub(b'typeface="' + FONT.encode() + b'"', part.blob)
+
+
 def build(deck, out_dir, template):
+    """Собирает колоду; если какие-то элементы пришлось уменьшить, пересобирает с единым кеглем этих
+    элементов на всех слайдах (до 3 проходов)."""
+    UNIFORM['caps'] = {}
+    for _ in range(3):
+        UNIFORM['shrunk'] = {}
+        prs, report = build_once(deck, template)
+        merged = dict(UNIFORM['caps'])
+        for role, v in UNIFORM['shrunk'].items():
+            merged[role] = min(v, merged.get(role, v))
+        if merged == UNIFORM['caps']:
+            break
+        UNIFORM['caps'] = merged
+    if UNIFORM['caps']:
+        report.append('единый кегль по колоде: ' + ', '.join(f'{r} — {v:g} pt' for r, v in sorted(UNIFORM['caps'].items())))
+    os.makedirs(out_dir, exist_ok=True)
+    fn = os.path.join(out_dir, deck.get('file', 'deck') + '.pptx')
+    prs.save(fn)
+    return fn, report
+
+
+def build_once(deck, template):
     prs = Presentation(template)
+    restyle(prs)
     direction = deck.get('direction', 'vtb')
     if direction not in DIRECTIONS:
         raise SystemExit(f'Неизвестное направление «{direction}». Есть: {", ".join(DIRECTIONS)}')
@@ -999,10 +1095,7 @@ def build(deck, out_dir, template):
         if id(lay) not in used_layouts:
             master.slide_layouts.remove(lay)
 
-    os.makedirs(out_dir, exist_ok=True)
-    fn = os.path.join(out_dir, deck.get('file', 'deck') + '.pptx')
-    prs.save(fn)
-    return fn, ctx['report']
+    return prs, ctx['report']
 
 
 def preview(pptx, out_dir):
