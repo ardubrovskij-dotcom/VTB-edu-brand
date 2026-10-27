@@ -1,50 +1,39 @@
-# Фирменные ресурсы
+# Ресурсы скилла
 
-Все файлы — из материалов «мерико × ВТБ Образование, 2026». В deck.json ресурсы указываются по имени без расширения.
+| Путь | Что | Как указать в deck.json |
+|---|---|---|
+| `assets/template.pptx` | облегчённый мастер-шаблон: 8 мастеров, слайды-прототипы 9–49 и 52, библиотека иконок и иллюстраций (63–75) | — (берётся сам) |
+| `assets/backgrounds/NN_MM.jpg` | 40 фонов (`backgrounds.jpg`) | `"background": "01_03"` в `section` |
+| `assets/cards/` | подложки карточек `card_MM`, `highlight_MM` (`cards.jpg`) | — (по направлению) |
+| `assets/people/` | портреты: `vtb`, `family`, `prof`, `china`, `b2b`, `infra`, `private`, `privilege`, `extra` (`people.jpg`) | `"portrait": "prof"` |
+| `assets/photos/` | фото сцен: `lecture`, `presenter`, `speaker`, `laptop`, `team` (вертикальное), `students` (вертикальное), `group`, `audience-cutout` (PNG без фона) | `"photo": "lecture"` |
+| `assets/logo/` | логотип: `logo-color`, `logo-white`, `logo-black`, `logo-onblue` | — |
+| `assets/fonts/` | Open Sans (OFL) — только для оценки переносов, если VTB Group не установлен | — |
+| `references/icons.png` | 43 иконки (вариант «Заливка» — суффикс `-fill`) | `"icon": "bank"` |
+| `references/illustrations.png` | 114 иллюстраций | `"icon": "ill-finance-05"` |
 
-## Иконки — `"icon": "<имя>"`
+Список имён иконок и иллюстраций без картинки: `python3 scripts/build_deck.py --list-icons`.
 
-Линейные, Retail Blue; для цветных плашек скрипт сам берёт белую версию `<имя>-white.png`. Наглядно: `references/icons.png`.
+## Подбор иконок по смыслу
+- обучение: `graduation`, `presentation`, `bulb`, `search`, `timer`, `edit`, `sign`
+- финансы: `bank`, `money`, `coins`, `card`, `calculator`, `briefcase`
+- ИТ: `monitor`, `server`, `cloud`, `link`, `globe`, `folder-in`
+- люди: `people`, `people-list`, `user-add`, `user-growth`, `user-target`, `user-chat`, `handshake`
+- управление: `structure`, `layers`, `folder`, `image`, `list-fill`, `dots`
+- связь: `mail`, `send`, `phone`, `chat`
+- знаки: `badge`, `bell`, `pin`, `home`, `copy`, `download`, `star`, `gear`
 
-`bank`, `bell`, `briefcase`, `bulb`, `calculator`, `card`, `chat`, `check`, `cloud`, `coins`, `copy`, `document`, `download`, `edit`, `edit-2`, `folder`, `folder-in`, `gear`, `globe`, `globe-2`, `graduation`, `handshake`, `home`, `image`, `layers`, `link`, `list`, `mail`, `mail-2`, `money`, `monitor`, `people`, `people-2`, `people-list`, `phone`, `pin`, `presentation`, `search`, `send`, `send-2`, `server`, `sign`, `signature`, `star`, `structure`, `timer`, `user-add`, `user-chat`, `user-growth`, `user-target`
+## Обновление шаблона
+Если маркетинг обновил шаблон или папку «ВТБ О брендинг»:
+1. Скачать новый PPTX и запустить
+   `python3 tools/prepare_template.py "<шаблон>.pptx" -o assets/template.pptx`.
+   Скрипт оставит слайды 9–49, 52, 63–75 (по номерам исходного шаблона), удалит лишние макеты, пережмёт картинки
+   (58 → 14 МБ) и уберёт встроенный шрифт VTB Group (`--keep-fonts` — оставить).
+2. Если номера или состав слайдов-образцов изменились — поправить `proto` и номера плейсхолдеров в
+   `scripts/layouts.py`, имена иконок — в `ICON_ROWS` в `scripts/build_deck.py`.
+3. Фоны, карточки и портреты — заменить файлы в `assets/` с теми же именами.
+4. Собрать `examples/example.json` с `--preview` и проверить картинки.
 
-Подбор по смыслу: обучение — `graduation`, `presentation`, `bulb`, `search`, `timer`; финансы — `bank`, `calculator`, `money`, `coins`, `card`, `briefcase`, `document`; ИТ — `monitor`, `server`, `cloud`, `link`, `globe`; люди — `people`, `people-list`, `user-add`, `user-growth`, `user-target`, `user-chat`, `handshake`; управление — `structure`, `list`, `layers`, `folder`, `edit`, `signature`; знаки — `check`, `bell`, `pin`, `home`, `copy`, `download`, `star`, `gear`; связь — `mail`, `send`, `phone`, `chat`.
-
-## Портреты для титула — `"portrait": "<имя>"`
-
-`vtb-2` — портрет с эталонной презентации «ШОиФД 2.0», используется по умолчанию на диагональном титуле.
-
-Вырезанные портреты на прозрачном фоне, по одному на направление (`references/portraits.jpg`): `b2b`, `china`, `family`, `infra`, `private`, `privilege`, `prof`, `vtb`.
-
-## Фото для контентных слайдов — `"photo": "<имя>"`
-
-Обзор: `references/photos.jpg`.
-
-| Имя | Сюжет |
-|---|---|
-| `lecture` | лектор у экрана, слушатели с блокнотами |
-| `presenter` | двое ведущих перед аудиторией |
-| `speaker` | выступающая с пультом |
-| `laptop` | девушка с ноутбуком, деловой квартал |
-| `team` | команда за столом (вертикальный кадр) |
-| `students` | студенты общаются (вертикальный кадр) |
-| `group` | студенты в учебном пространстве |
-| `audience-cutout` | спикер и слушатели, вырезано (PNG) |
-
-## Фоны-паттерны — `"background": "<направление>"`
-
-По умолчанию берётся фон направления презентации (`references/backgrounds.jpg`): `b2b`, `china`, `family`, `infra`, `private`, `privilege`, `prof`, `vtb`.
-
-`panel-vtb` — градиентная панель с дугами для диагонального титула и раздела (подставляется автоматически).
-
-## Логотипы — `assets/logo/`
-
-`logo-color.png` (светлый фон), `logo-white.png` (градиент, фото, тёмный фон), `logo-black.png` (монохром), `logo-onblue.png` (Retail Blue).
-
-## Мокапы — `assets/mockups/`
-
-`phone.png`, `laptop.png` — пустые экраны устройств.
-
-## Шрифты — `assets/fonts/`
-
-Open Sans (Light, Regular, SemiBold; лицензия OFL) — только для превью и оценки переносов. В самой презентации прописан VTB Group.
+## Почему шрифт не встроен
+Репозиторий публичный, а VTB Group — корпоративный шрифт. В PPTX прописаны `VTB Group Book` / `VTB Group Light`:
+на компьютерах ВТБ со шрифтом презентация выглядит как шаблон, без шрифта PowerPoint подставит замену.
