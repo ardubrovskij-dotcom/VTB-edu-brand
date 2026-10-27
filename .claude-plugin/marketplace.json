@@ -1,0 +1,18 @@
+{
+  "name": "vtb-edu-brand",
+  "owner": {
+    "name": "ardubrovskij-dotcom"
+  },
+  "metadata": {
+    "description": "Скиллы Claude в фирменном стиле «ВТБ Образование».",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "vtb-edu-brand",
+      "source": "./",
+      "description": "Скиллы в фирменном стиле «ВТБ Образование»: презентации PPTX по мастер-шаблону.",
+      "version": "1.0.0"
+    }
+  ]
+}
