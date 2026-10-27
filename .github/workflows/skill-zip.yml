@@ -1,0 +1,27 @@
+# Собирает zip скилла для загрузки в claude.ai и кладёт его в релиз «latest».
+name: Скилл в zip
+on:
+  push:
+    branches: [main, master, claude/vtb-education-branding-skill-nluetx]
+    paths: ['skills/**']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  zip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Упаковать скилл
+        run: |
+          cd skills
+          zip -r -q ../vtb-edu-presentations.zip vtb-edu-presentations -x '*/__pycache__/*'
+      - name: Обновить релиз latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest vtb-edu-presentations.zip \
+            --title "Скилл vtb-edu-presentations (последняя версия)" \
+            --notes "zip для загрузки в claude.ai → Настройки → Скиллы. Собран из ${GITHUB_SHA::7}." \
+            --target "$GITHUB_SHA"
