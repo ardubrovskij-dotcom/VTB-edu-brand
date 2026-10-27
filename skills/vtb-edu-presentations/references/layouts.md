@@ -35,6 +35,29 @@
 - `photo` — имя из `assets/photos` (`lecture`, `speaker`…) или путь к своему файлу (от папки deck.json).
   Кадрируется по рамке автоматически.
 
+## Фирменный стиль (по умолчанию)
+
+Вид и правила — `house-style.md`, превью — `house-1.jpg`, `house-2.jpg`, пример — `examples/shoifd.json`.
+Общие поля: `title` (вывод, до 4 строк), `subtitle` (серым под заголовком), `title2` (вторая строка капсом),
+`footnote` (сноска внизу), `notes`. Текст `**так**` — полужирным.
+
+| layout | Поля | items |
+|---|---|---|
+| `title` | `title`, `note` (синим), `date`, `portrait` | — |
+| `chapter` | `kicker` (серый надзаголовок), `title`, `note`, `date`, `date_muted: true` (дата серым) | — |
+| `cards` | `height` (необяз., по умолчанию 164 pt) | 2–4 × `title`, `text`, `icon` (необяз.), `accent: true` |
+| `stats` | `columns` (необяз.), `height` | до 9 × `value` («17 стран», «80 из 89»), `text` |
+| `speakers` | — | до 9 × `name`, `role`, `photo` (путь к фото) |
+| `features` | `card_title`, `card_icon` | 6 × `icon`, `text` |
+| `rows` | — | 2–4 × `title`, `icon` (водяной знак), `points` (список), `columns` (1 или 2) |
+| `datatable` | `table`: `columns`, `rows`, `highlight` (номера выделенных строк, по умолчанию `[0]`), `widths` (доли); `align: "top"` — таблица сразу под заголовком | — |
+| `course` | `title` (название курса), `lead` (описание), `modules` («**Тема.** пояснение»), `modules_title` (необяз.) | — |
+| `team` | `title` (по умолчанию «Контакты») | до 3 × `name`, `role`, `email`, `phone`, `photo` |
+
+# Макеты мастер-шаблона
+
+Используются, когда нужного вида нет в фирменном стиле: диаграммы, схемы, таймлайн, фото-слайды, хайлайты с иконками.
+
 ## Обложки и разделы
 
 | layout | Поля | Что на слайде |

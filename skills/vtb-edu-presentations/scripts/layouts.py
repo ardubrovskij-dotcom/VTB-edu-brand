@@ -20,6 +20,18 @@ def _cards(boxes, ids, photo=False):
 
 
 LAYOUTS = {
+    # ---------- фирменный стиль команды (эталон «ШОиФД 2.0»), рисуются scripts/house.py ----------
+    'title': dict(proto=13, house='title', portrait='Image'),
+    'chapter': dict(proto=13, house='chapter'),
+    'cards': dict(proto=36, house='cards'),
+    'stats': dict(proto=36, house='stats'),
+    'speakers': dict(proto=36, house='speakers'),
+    'features': dict(proto=36, house='features'),
+    'rows': dict(proto=36, house='rows'),
+    'datatable': dict(proto=36, house='datatable'),
+    'course': dict(proto=36, house='course'),
+    'team': dict(proto=36, house='team'),
+
     # ---------- обложки ----------
     'cover': dict(proto=9, fields={'title': 0, 'subtitle': 12, 'meta': 11}, portrait='Image'),
     'cover-panel': dict(proto=10, fields={'title': 0, 'subtitle': 10, 'date': 11}, portrait='Image', partner=True),

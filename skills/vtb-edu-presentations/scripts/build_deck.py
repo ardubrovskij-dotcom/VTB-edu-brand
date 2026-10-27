@@ -21,6 +21,7 @@ from pptx.util import Pt, Emu
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from layouts import LAYOUTS, DIRECTIONS, PEOPLE  # noqa: E402
+import house  # noqa: E402
 
 SKILL = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ASSETS = os.path.join(SKILL, 'assets')
@@ -810,6 +811,25 @@ def keep_text_off_portrait(slide, pic, fitter, report, where):
             fit(sh, slide, fitter, report, where + '/подзаголовок', 2)
 
 
+def fill_house(slide, spec, s, ctx, where):
+    """Макеты фирменного стиля команды (scripts/house.py)."""
+    if spec['house'] in ('title', 'chapter'):
+        pic = find_shape(slide, 'Image')
+        p = s.get('portrait', ctx['direction']) if spec['house'] == 'title' else False
+        if pic is not None:
+            if p is False:
+                delete(pic)
+            else:
+                path = asset('people', person_key(p))
+                if path:
+                    put_image(slide, pic, path, focus=(0.5, 0.0))
+                else:
+                    ctx['report'].append(f'{where}: портрет «{p}» не найден')
+    house.HOUSE[spec['house']](slide, s, ctx, where)
+    if s.get('notes'):
+        set_notes(slide, s['notes'])
+
+
 def set_notes(slide, text):
     """Заметки докладчика. В мастере заметок шаблона нет поля текста — добавляем его сами."""
     ns = slide.notes_slide
@@ -938,7 +958,7 @@ def build(deck, out_dir, template):
     master = prs.slide_masters[n - 1]
     protos = {s._element.cSld.get('name'): s for s in prs.slides}
     originals = list(prs.slides)
-    ctx = dict(report=[], fitter=Fitter(), lib=build_library(prs), direction=direction, dir_no=n)
+    ctx = dict(report=[], fitter=Fitter(), lib=build_library(prs), direction=direction, dir_no=n, prs=prs)
     exact = {l.name.strip(): l for l in master.slide_layouts}
     loose = {norm(l.name): l for l in master.slide_layouts}
 
@@ -960,7 +980,11 @@ def build(deck, out_dir, template):
                 fix_cover_layout(layout, partner)
                 fixed.add(id(layout))
         slide = clone_slide(prs, proto, layout)
-        fill_slide(prs, slide, spec, s, ctx, f'слайд {i} ({name})')
+        where = f'слайд {i} ({name})'
+        if spec.get('house'):
+            fill_house(slide, spec, s, ctx, where)
+        else:
+            fill_slide(prs, slide, spec, s, ctx, where)
 
     for sl in originals:
         drop_slide(prs, sl)
