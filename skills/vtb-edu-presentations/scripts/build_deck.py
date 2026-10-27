@@ -33,7 +33,7 @@ R_NS = NS['r']
 MIN_PT = 9
 # Шрифт бренда с 2026 г. — VTB Omega UI (Regular, Medium, DemiBold, Bold). VTB Group шаблона заменяется при сборке.
 FONT = 'VTB Omega UI'
-FONT_DEMI = 'VTB Omega UI DemiBold'
+FONT_DEMI = 'VTB Omega UI Medium'  # выделение — Medium (DemiBold слишком жирный)
 # Единый кегль по колоде: если элемент пришлось уменьшить на одном слайде, тот же элемент (роль) на всех
 # слайдах получает тот же кегль. shrunk — минимальный кегль роли, до которого пришлось уменьшать в этом проходе,
 # caps — потолок кегля роли во втором проходе.
@@ -294,7 +294,7 @@ class Fitter:
             self._demi_path = None
             try:
                 out = subprocess.run(['fc-match', '-f', '%{file}', FONT_DEMI], capture_output=True, text=True).stdout
-                if out and 'demi' in out.lower():
+                if out and 'medium' in out.lower():
                     self._demi_path = out
             except FileNotFoundError:
                 pass
@@ -304,7 +304,7 @@ class Fitter:
         path = (self._demi() if bold else None) or self.font_path
         key = (path, round(size * 4))
         f = self.cache.get(key) or self.cache.setdefault(key, ImageFont.truetype(path, key[1] * 10))
-        w = f.getlength(text) / 40
+        w = f.getlength(text) / 40 * 1.04  # запас: PowerPoint набирает чуть шире, чем замер Pillow
         return w * (1.06 if bold and path == self.font_path else 1)
 
     def lines(self, text, size, width, caps=False, bold=False):

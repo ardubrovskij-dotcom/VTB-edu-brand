@@ -28,13 +28,14 @@ P = 'http://schemas.openxmlformats.org/presentationml/2006/main'
 X0, X1, W = 30, 930, 900          # поля и ширина контента
 BOTTOM = 487                      # нижняя граница контента
 GAP = 10                          # шаг между карточками
-TITLE_TOP, TITLE_SIZE, TITLE_PITCH = 30, 32, 35
+TITLE_TOP, TITLE_SIZE, TITLE_PITCH = 30, 28, 31  # заголовок до 3 строк (правка автора)
+SUB_SIZE, SUB_PITCH = 19, 23  # подзаголовок крупнее (правка автора)
 CARD = 'F4F6FA'
 TEXT = '3A4250'
 MUTED = '6B7683'
 INK = '1C1C1C'
 FONT = 'VTB Omega UI'
-FONT_DEMI = 'VTB Omega UI DemiBold'  # полужирное в макетах — DemiBold, а не синтетический bold
+FONT_DEMI = 'VTB Omega UI Medium'  # выделение — Medium: DemiBold и Bold слишком жирные (правка автора)
 
 # цвет цифр и имён, градиент акцентных блоков (слева направо) — по направлению
 ACCENT = {1: '0A2896', 2: '803CE9', 3: '750CF6', 4: '0A2896', 5: '1E4BD2', 6: '1E4BD2', 7: '000324', 8: '900258'}
@@ -139,9 +140,12 @@ def fit_size(ctx, paras, size, width, height, pitch_k=1.2, floor=9, caps=False, 
     role — элемент для единого кегля по колоде (см. UNIFORM в build_deck.py)."""
     n_par = len(paras) if isinstance(paras, list) else 1
     s = B().capped(role, size)
+    words = re.findall(r'\S+', re.sub(r'\*\*', '', ' '.join(paras) if isinstance(paras, list) else paras))
     while True:
         h = lines(ctx, paras, s, width, caps) * s * pitch_k + gap * (n_par - 1)
-        if h <= height or s <= floor:
+        # самое длинное слово тоже должно помещаться, иначе оно разорвётся по буквам
+        widest = max((ctx['fitter'].width(w, s) for w in words), default=0)
+        if (h <= height and widest <= width) or s <= floor:
             B().note_size(role, size, s)
             return s, h <= height
         s -= 0.5
@@ -159,14 +163,14 @@ def clear_slide(slide):
         sh._element.getparent().remove(sh._element)
 
 
-def header(slide, s, ctx, where, top=TITLE_TOP, width=735, size=TITLE_SIZE, max_lines=4):
+def header(slide, s, ctx, where, top=TITLE_TOP, width=735, size=TITLE_SIZE, max_lines=3):
     """Заголовок-вывод и подзаголовок. Возвращает нижнюю границу шапки."""
     title = s.get('title', '')
     t = next((p for p in slide.placeholders if p.placeholder_format.type == 1), None)
     role = 'заголовок' if size == TITLE_SIZE else None
     sz = B().capped(role, size)
     n = lines(ctx, title, sz, width, caps=False) if title else 0
-    while n > max_lines and sz > 24:
+    while n > max_lines and sz > 20:
         sz -= 1
         n = lines(ctx, title, sz, width, caps=False)
     B().note_size(role, size, sz)
@@ -196,9 +200,11 @@ def header(slide, s, ctx, where, top=TITLE_TOP, width=735, size=TITLE_SIZE, max_
         text(slide, X0, y + 8, width, n2 * 19, s['title2'], 16, INK, caps=False, pitch=19)
         y += 8 + n2 * 19
     if s.get('subtitle'):
-        n2 = lines(ctx, s['subtitle'], 16, 640)
-        text(slide, X0, y + 6, 640, n2 * 19, s['subtitle'], 16, MUTED, pitch=19, name='Подзаголовок')
-        y += 6 + n2 * 19
+        ss = B().capped('подзаголовок', SUB_SIZE)
+        n2 = lines(ctx, s['subtitle'], ss, 735)
+        sp = ss * SUB_PITCH / SUB_SIZE
+        text(slide, X0, y + 8, 735, n2 * sp, s['subtitle'], ss, MUTED, pitch=sp, name='Подзаголовок')
+        y += 8 + n2 * sp
     if s.get('footnote'):
         text(slide, X0, 495, 700, 14, s['footnote'], 9.5, MUTED, name='Сноска')
     return y
@@ -294,13 +300,28 @@ def h_stats(slide, s, ctx, where):
     for k, it in enumerate(its):
         x = X0 + (k % cols) * (w + GAP)
         y = top + (k // cols) * (h + GAP)
+        if it.get('accent'):  # акцентная плитка с текстом: цели, описание
+            rect(slide, x, y, w, h, grad=GRAD[ctx['dir_no']])
+            ty = y + 16
+            if it.get('title'):
+                text(slide, x + pad, ty, w - 2 * pad, 20, it['title'], 15, 'FFFFFF', bold=True)
+                ty += 26
+            pts = it.get('points') or ([it['text']] if it.get('text') else [])
+            ps, ok = fit_size(ctx, pts, 12, w - 2 * pad - 14, y + h - 14 - ty, 14.5 / 12, gap=5, role='текст плитки')
+            if not ok:
+                warn(ctx, where, f'ПЕРЕПОЛНЕНИЕ в плитке {k + 1}')
+            text(slide, x + pad, ty, w - 2 * pad, y + h - 14 - ty, pts, ps, 'FFFFFF', pitch=ps * 14.5 / 12,
+                 bullet='FFFFFF' if len(pts) > 1 else None, gap=5)
+            continue
         rect(slide, x, y, w, h)
         val = str(it.get('value', ''))
         vs, _ = fit_size(ctx, val, 48, w - 2 * pad, 60, role='цифра')
-        text(slide, x + pad, y + 8, w - 2 * pad, 60, val, vs, col, small=(vs * 0.45, r'[A-Za-zА-Яа-яЁё]+'),
+        text(slide, x + pad, y + 8, w - 2 * pad, 60, val, vs, col, small=(vs * 0.45, r'[А-Яа-яЁё]+'),
              pitch=vs * 1.15, name='Цифра')
         if it.get('text'):
             ts, ok = fit_size(ctx, it['text'], 14, w - 2 * pad, h - 75, 17 / 14, role='подпись цифры')
+            if not ok:
+                warn(ctx, where, f'ПЕРЕПОЛНЕНИЕ в подписи цифры {k + 1}')
             text(slide, x + pad, y + 70, w - 2 * pad, h - 70 - 17, it['text'], ts, TEXT, anchor='bottom',
                  pitch=ts * 17 / 14)
 
@@ -318,6 +339,17 @@ def h_speakers(slide, s, ctx, where):
     h = 115
     top = content_top(slide, s, ctx, where, rows * h + (rows - 1) * GAP, hb)
     col = ACCENT[ctx['dir_no']]
+    st = s.get('stat')  # общая цифра над карточками: «9,25/10 — средняя оценка спикеров»
+    if st:
+        vs = B().capped('цифра', 48)
+        vy = top - 18 - vs * 1.15
+        if vy < hb + 10:
+            warn(ctx, where, 'ПЕРЕПОЛНЕНИЕ — цифра над спикерами наезжает на заголовок')
+        val = str(st.get('value', ''))
+        vw = ctx['fitter'].width(re.sub(r'[А-Яа-яЁё/]+', '', val), vs) + 16
+        text(slide, X0, vy, vw + 40, vs * 1.15, val, vs, col, small=(vs * 0.45, r'[А-Яа-яЁё/]+'),
+             pitch=vs * 1.15, name='Цифра')
+        text(slide, X0 + vw + 24, vy, 360, vs * 1.15, st.get('text', ''), 14, TEXT, anchor='middle', pitch=17)
     for k, it in enumerate(its):
         x = X0 + (k % cols) * (w + GAP)
         y = top + (k // cols) * (h + GAP)
@@ -336,18 +368,30 @@ def h_speakers(slide, s, ctx, where):
         tx, tw = x + 15 + ph + 14, w - (15 + ph + 14) - 12
         name = it.get('name', 'Фамилия Имя')
         role = it.get('role', '')
-        ns = B().capped('имя', 19)
-        while lines(ctx, name, ns, tw, bold=True) > 1 and ns > 16:
-            ns -= 0.5  # имя — в одну строку, если это возможно без мелкого кегля
-        B().note_size('имя', 19, ns)
-        nl = lines(ctx, name, ns, tw, bold=True)
-        rs, _ = fit_size(ctx, role, 13.5, tw, h - 24 - nl * 22, 15 / 13.5, role='должность')
-        rl = lines(ctx, role, rs, tw)
-        block = nl * 22 + rl * rs * 15 / 13.5 + 2
+        # имя и должность обязаны поместиться в карточку: сначала имя в одну строку, затем всё вместе уменьшается
+        ns = B().capped('имя', 18)
+        while lines(ctx, name, ns, tw, bold=True) > 1 and ns > 13:
+            ns -= 0.5
+        rs = B().capped('должность', 13)
+        while True:
+            nl = lines(ctx, name, ns, tw, bold=True)
+            rl = lines(ctx, role, rs, tw) if role else 0
+            npitch, rpitch = ns * 1.2, rs * 1.2
+            block = nl * npitch + (rl * rpitch + 4 if role else 0)
+            if block <= h - 16 or (ns <= 12 and rs <= 9):
+                break
+            if rs > 9:
+                rs -= 0.5
+            else:
+                ns -= 0.5
+        if block > h - 16:
+            warn(ctx, where, f'ПЕРЕПОЛНЕНИЕ — спикер {k + 1}: сократите должность')
+        B().note_size('имя', 18, ns)
+        B().note_size('должность', 13, rs)
         by = y + (h - block) / 2
-        text(slide, tx, by, tw, nl * 22, name, ns, col, bold=True, pitch=22)
+        text(slide, tx, by, tw, nl * npitch + 2, name, ns, col, bold=True, pitch=npitch)
         if role:
-            text(slide, tx, by + nl * 22 + 2, tw, rl * rs * 15 / 13.5 + 2, role, rs, TEXT, pitch=rs * 15 / 13.5)
+            text(slide, tx, by + nl * npitch + 4, tw, rl * rpitch + 2, role, rs, TEXT, pitch=rpitch)
 
 
 def h_features(slide, s, ctx, where):
@@ -404,12 +448,21 @@ def h_rows(slide, s, ctx, where):
     grad = GRAD[ctx['dir_no']]
     for it, h in zip(its, heights):
         rect(slide, X0, y, W, h)
-        lab = rect(slide, X0, y, lw + 6, h, grad=grad)
+        muted = it.get('muted')  # серая метка вместо градиента (правка автора: «формат взаимодействия»)
+        if muted:
+            rect(slide, X0, y, lw + 6, h, fill='E3E7F0')
+        else:
+            rect(slide, X0, y, lw + 6, h, grad=grad)
         # правый край метки прямой: накрываем скругление серой полосой
         cover = rect(slide, X0 + lw, y, 6, h, fill=CARD, radius=0)
         if it.get('icon'):
-            icon(slide, ctx, it['icon'], X0 + lw - 96, y + h - 80, 88, where, white=True, alpha=0.35)
-        text(slide, X0 + 16, y + 14, lw - 110, 40, it.get('title', ''), 14, 'FFFFFF', pitch=17)
+            icon(slide, ctx, it['icon'], X0 + lw - 96, y + h - 80, 88, where, white=not muted, alpha=0.35)
+            if muted:  # синяя иконка тоже полупрозрачная
+                for blip in slide.shapes[-1]._element.iter('{%s}blip' % A):
+                    for ext in blip.findall('{%s}extLst' % A):
+                        blip.remove(ext)
+                    blip.append(parse_xml(f'<a:alphaModFix xmlns:a="{A}" amt="30000"/>'))
+        text(slide, X0 + 16, y + 14, lw - 110, 40, it.get('title', ''), 14, INK if muted else 'FFFFFF', pitch=17)
         pts = it.get('points') or []
         ncol = it.get('columns') or (2 if len(pts) > 3 else 1)
         per = (len(pts) + ncol - 1) // ncol
@@ -603,7 +656,7 @@ def h_title(slide, s, ctx, where):
         tree.remove(pic._element)
         tree.insert(2, pic._element)
     size0 = 48 if chapter else 36
-    sz, ok = fit_size(ctx, title, size0, 500, (2 if chapter else 5) * size0 * 1.07, 1.07, floor=24, caps=False)
+    sz, ok = fit_size(ctx, title, size0, 500, (2 if chapter else 3) * size0 * 1.07, 1.07, floor=22, caps=False)
     if not ok:
         warn(ctx, where, 'ПЕРЕПОЛНЕНИЕ — название не помещается')
     n = lines(ctx, title, sz, 500, caps=False)

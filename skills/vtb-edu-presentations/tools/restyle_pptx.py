@@ -6,7 +6,7 @@
 
 Что меняется:
 - шрифты темы (заголовки и текст) во всех темах — VTB Omega UI;
-- VTB Group Book / Light → VTB Omega UI, VTB Group Bold / Medium → VTB Omega UI DemiBold;
+- VTB Group Book / Light → VTB Omega UI, VTB Group Bold / Medium → VTB Omega UI Medium;
 - атрибут «все прописные» (cap="all") снимается во всех мастерах, макетах и слайдах;
 - текст, набранный ПРОПИСНЫМИ вручную (от двух слов), переводится в обычный регистр; аббревиатуры
   (ВТБ, РФ, ШОиФД, МСФО…) сохраняются. Список — ACRONYMS.

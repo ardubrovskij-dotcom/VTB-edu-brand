@@ -38,7 +38,7 @@
 ## Фирменный стиль (по умолчанию)
 
 Вид и правила — `house-style.md`, превью — `house-1.jpg`, `house-2.jpg`, пример — `examples/shoifd.json`.
-Общие поля: `title` (вывод, до 4 строк), `subtitle` (серым под заголовком), `title2` (вторая строка, 16 pt),
+Общие поля: `title` (вывод, до 3 строк), `subtitle` (серым под заголовком), `title2` (вторая строка, 16 pt),
 `footnote` (сноска внизу), `notes`. Текст `**так**` — полужирным.
 
 | layout | Поля | items |
@@ -46,10 +46,10 @@
 | `title` | `title`, `note` (синим), `date`, `portrait` | — |
 | `chapter` | `kicker` (серый надзаголовок), `title`, `note`, `date`, `date_muted: true` (дата серым) | — |
 | `cards` | `height` (необяз., по умолчанию 164 pt) | 2–4 × `title`, `text`, `icon` (необяз.), `accent: true` |
-| `stats` | `columns` (необяз.), `height` | до 9 × `value` («17 стран», «80 из 89»), `text` |
-| `speakers` | — | до 9 × `name`, `role`, `photo` (путь к фото) |
+| `stats` | `columns` (необяз.), `height` | до 9 × `value` («17 стран», «80 из 89»), `text`; плитка с текстом: `accent: true`, `title`, `points` |
+| `speakers` | `stat`: `{value, text}` — общая цифра над карточками | до 9 × `name`, `role`, `photo` (путь к фото) |
 | `features` | `card_title`, `card_icon` | 6 × `icon`, `text` |
-| `rows` | — | 2–4 × `title`, `icon` (водяной знак), `points` (список), `columns` (1 или 2) |
+| `rows` | — | 2–4 × `title`, `icon` (водяной знак), `points` (список), `columns` (1 или 2), `muted: true` — серая метка |
 | `datatable` | `table`: `columns`, `rows`, `highlight` (номера выделенных строк, по умолчанию `[0]`), `widths` (доли); `align: "top"` — таблица сразу под заголовком | — |
 | `course` | `title` (название курса), `lead` (описание), `modules` («**Тема.** пояснение»), `modules_title` (необяз.) | — |
 | `team` | `title` (по умолчанию «Контакты») | до 3 × `name`, `role`, `email`, `phone`, `photo` |
