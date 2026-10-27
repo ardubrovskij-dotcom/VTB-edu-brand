@@ -40,7 +40,7 @@ PX = 12700  # 1 px макета = 1 pt = 12700 EMU
 FONT = "VTB Group Book"
 FONT_LIGHT = "VTB Group Light"
 # Метрики для оценки переноса строк: Open Sans близок по ширине знаков к VTB Group.
-MEASURE = {False: A / "fonts" / "OpenSans-Regular.ttf", True: A / "fonts" / "OpenSans-Light.ttf"}
+MEASURE = {False: A / "fonts" / "OpenSans-Regular.ttf", True: A / "fonts" / "OpenSans-Light.ttf"}  # light=True → Light
 
 # --- Палитра (references/brand.md) ---------------------------------------
 RETAIL = "0A2896"     # Retail Blue
@@ -54,6 +54,10 @@ TEXT = "6B7683"       # основной текст на светлом фоне
 CARD = "F4F6FA"       # тело карточки (EAEDF5 на 50 %)
 CARD_HEAD = "EAEDF5"  # шапка серой карточки, выделенная строка таблицы
 PAGE = "C9CFD9"       # номер слайда
+DARK = "1C1C1C"       # заголовки карточек, должности, выделенный текст
+KICKER = "656565"     # надзаголовок контентного слайда
+LINE_T = "CBCBCB"     # тонкие линии таблицы
+BOTTOM = 976          # нижняя граница контента: блоки прижимаются к ней
 
 # Направления: градиент шапки (слева → направо), второй цвет, сплошной цвет, акцент цифр, ряд для графиков.
 DIRECTIONS = {
@@ -173,8 +177,8 @@ def polygon(slide, pts, color=WHITE):
     return s
 
 
-def picture(slide, path, x, y, w=None, h=None, cover=False, radius=0):
-    """cover=True — заполнить рамку w×h с обрезкой, как object-fit: cover."""
+def picture(slide, path, x, y, w=None, h=None, cover=False, radius=0, focus="center"):
+    """cover=True — заполнить рамку w×h с обрезкой, как object-fit: cover; focus="top" — оставить верх кадра (лица)."""
     path = str(path)
     if cover and w and h:
         iw, ih = Image.open(path).size
@@ -184,8 +188,11 @@ def picture(slide, path, x, y, w=None, h=None, cover=False, radius=0):
             c = (1 - r_box / r_img) / 2
             pic.crop_left = pic.crop_right = c
         else:
-            c = (1 - r_img / r_box) / 2
-            pic.crop_top = pic.crop_bottom = c
+            c = (1 - r_img / r_box)
+            if focus == "top":
+                pic.crop_top, pic.crop_bottom = c * 0.08, c * 0.92
+            else:
+                pic.crop_top = pic.crop_bottom = c / 2
     else:
         pic = slide.shapes.add_picture(path, E(x), E(y), E(w) if w else None, E(h) if h else None)
     if radius:
@@ -204,16 +211,17 @@ def picture(slide, path, x, y, w=None, h=None, cover=False, radius=0):
 _fonts = {}
 
 
-def _font(size, light):
-    k = (round(size * 4) / 4, light)
+def _font(size, light, bold=False):
+    k = (round(size * 4) / 4, light, bold)
     if k not in _fonts:
-        _fonts[k] = ImageFont.truetype(str(MEASURE[light]), int(round(size * 4)))
+        path = A / "fonts" / "OpenSans-SemiBold.ttf" if bold else MEASURE[light]
+        _fonts[k] = ImageFont.truetype(str(path), int(round(size * 4)))
     return _fonts[k]
 
 
-def measure(text, size, width, light=False, upper=False, spacing=1.2):
+def measure(text, size, width, light=False, upper=False, spacing=1.2, bold=False):
     """Сколько строк и какой высоты займёт текст в рамке шириной width (px)."""
-    f = _font(size, light)
+    f = _font(size, light, bold)
     lines = 0
     for para in re.split(r"<br\s*/?>|\n", str(text)):
         para = typo(plain(para))  # те же неразрывные пробелы, что попадут в слайд
@@ -259,12 +267,13 @@ def upper_keep(s):
 
 
 def runs(text):
-    """Разбор мини-разметки: <b>…</b> — акцентный цвет, <g>…</g> — серый, \\n или <br> — новая строка."""
+    """Разбор мини-разметки: <b>…</b> — акцентный цвет, <g>…</g> — серый, <s>…</s> — тёмный полужирный
+    (термин в списке), <d>…</d> — тёмный, \\n или <br> — новая строка."""
     out = []
     for para in re.split(r"<br\s*/?>|\n", str(text)):
         parts = []
         para = re.sub(r"</?k>", "", para)
-        for m in re.finditer(r"<(b|g)>(.*?)</\1>|([^<]+)", para):
+        for m in re.finditer(r"<(b|g|s|d)>(.*?)</\1>|([^<]+)", para):
             if m.group(3) is not None:
                 parts.append((typo(plain(m.group(3))), None))
             else:
@@ -274,17 +283,17 @@ def runs(text):
 
 
 def text(slide, x, y, w, h, s, size=32, color=TEXT, light=False, upper=False, align="l", anchor="t",
-         spacing=1.2, min_size=16, accent=None, where=""):
+         spacing=1.2, min_size=16, accent=None, where="", bold=False):
     """Текстовый блок. Если текст не влезает — уменьшает кегль до min_size и пишет в отчёт."""
     s = "" if s is None else str(s)
     if upper:
         s = upper_keep(s)
     sz = size
-    while sz > min_size and measure(s, sz, w, light, spacing=spacing)[1] > h + 1:
+    while sz > min_size and measure(s, sz, w, light, spacing=spacing, bold=bold)[1] > h + 1:
         sz -= 1
     if sz != size:
         REPORT.append(f"{where}: кегль уменьшен {size}→{sz}")
-    if measure(s, sz, w, light, spacing=spacing)[1] > h + 1:
+    if measure(s, sz, w, light, spacing=spacing, bold=bold)[1] > h + 1:
         REPORT.append(f"{where}: ПЕРЕПОЛНЕНИЕ — текст не влезает даже при {sz} pt, сократите")
     tb = slide.shapes.add_textbox(E(x), E(y), E(w), E(h))
     tf = tb.text_frame
@@ -295,14 +304,16 @@ def text(slide, x, y, w, h, s, size=32, color=TEXT, light=False, upper=False, al
     for i, parts in enumerate(runs(s)):
         p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
         p.alignment = {"l": PP_ALIGN.LEFT, "c": PP_ALIGN.CENTER, "r": PP_ALIGN.RIGHT}[align]
-        p.line_spacing = spacing
+        p.line_spacing = Pt(round(sz * spacing, 1))  # точный интервал, как line-height в Figma
         for t, kind in parts or [("", None)]:
             r = p.add_run()
             r.text = t
             f = r.font
             f.size = Pt(sz)
             f.name = FONT_LIGHT if light else FONT
-            f.color.rgb = rgb({"b": accent or T["accent"], "g": GREY}.get(kind, color))
+            f.color.rgb = rgb({"b": accent or T["accent"], "g": GREY, "s": DARK, "d": DARK}.get(kind, color))
+            if kind == "s" or bold:
+                f.bold = True
     return tb
 
 
@@ -363,36 +374,62 @@ def partner(slide, s, x, y, h=50, color=BLACK):
 
 
 def page_no(slide, n):
-    text(slide, 1780, 1022, 80, 30, f"{n:02d}", size=16, color=PAGE, align="r", min_size=16)
+    text(slide, 1780, 1022, 100, 26, str(n), size=16, color=PAGE, align="r", min_size=16)
 
 
-def title(slide, s, where, top=52, width=1480, size=82):
-    """Заголовок слайда: прописные, 82 pt, чёрный; часть в <g>…</g> — серая (как «РЕЗЮМЕ <g>ВТБ ОБРАЗОВАНИЕ</g>»).
-    Возвращает Y начала контента (217 при одной строке)."""
+def header(slide, s, where, width=1480):
+    """Шапка контентного слайда по образцу презентации ШОиФД 2.0 (октябрь 2026):
+    kicker — надзаголовок 32 pt серым прописными («БАЗОВЫЙ ФОРМАТ:», «ШОиФД-1, ОСЕНЬ 2023»);
+    title — заголовок-вывод 64 pt прописными, до 4 строк; часть в <g>…</g> — серая;
+    subtitle (или lead) — подзаголовок 32 pt серо-синим.
+    Возвращает Y, ниже которого свободно."""
+    y = 52
+    if s.get("kicker"):
+        text(slide, 60, 64, width, 44, s["kicker"], size=32, color=KICKER, upper=True, spacing=1.0, min_size=24,
+             where=where + " надзаголовок")
+        y = 100
     t = s.get("title", "")
     if s.get("title_grey"):
         t = f"{t} <g>{s['title_grey']}</g>"
-    n, hgt = measure(t, size, width, upper=True, spacing=1.0)
-    if n > 2:
-        REPORT.append(f"{where}: заголовок в {n} строки — сократите до 1–2")
-    text(slide, 60, top, width, max(hgt, size * 1.25), t, size=size, color=BLACK, upper=True, spacing=1.0,
-         min_size=60, where=where + " заголовок")
-    return 217 if n <= 1 else 217 + int(size * (min(n, 2) - 1))
+    size = s.get("title_size", 64)
+    if t:
+        n, hgt = measure(t, size, width, upper=True, spacing=1.1)
+        if n > 4:
+            REPORT.append(f"{where}: заголовок в {n} строк — сократите до 4")
+        hgt = min(hgt, size * 1.1 * 4)
+        text(slide, 60, y, width, hgt + 8, t, size=size, color=BLACK, upper=True, spacing=1.1,
+             min_size=48, where=where + " заголовок")
+        y += hgt + 8
+    sub = s.get("subtitle") or s.get("lead")
+    if sub:
+        sw = 1800 if y > 130 else 1480  # ниже логотипа — на всю ширину
+        n, hgt = measure(sub, 32, sw, spacing=1.2)
+        hgt = min(hgt, 32 * 1.2 * 5)
+        text(slide, 60, y + 10, sw, hgt + 4, sub, size=32, color=TEXT, min_size=24, where=where + " подзаголовок")
+        y += 10 + hgt + 4
+    return int(y + 40)
+
+
+def title(slide, s, where):
+    return header(slide, s, where)
 
 
 def light_slide(prs, s, where, n):
     sl = prs.slides.add_slide(prs.slide_layouts[6])
-    logo_right(sl)
-    top = title(sl, s, where) if s.get("title") else 217
-    if s.get("lead"):
-        # Лид — вывод слайда одним-двумя предложениями под коротким заголовком; <g>…</g> — серое уточнение
-        lines, hgt = measure(s["lead"], 36, 1800)
-        hgt = min(hgt, 36 * 1.2 * 3)
-        text(sl, 60, top - 10, 1800, hgt + 4, s["lead"], size=36, color=BLACK, min_size=28,
-             where=where + " лид")
-        top = int(top - 10 + hgt + 40)
+    if s.get("logo", True):
+        logo_right(sl)
+    top = header(sl, s, where)
     page_no(sl, n)
     return sl, top
+
+
+def footnote(slide, s, where):
+    """Сноска и источник — 20 pt внизу слайда, над номером страницы."""
+    parts = [x for x in (s.get("footnote"), f"Источник: {s['source']}" if s.get("source") else None) if x]
+    if parts:
+        t = "\n".join(parts)
+        n, hgt = measure(t, 20, 1600)
+        text(slide, 60, 1024 - hgt, 1600, hgt + 2, t, size=20, color=TEXT, min_size=16, where=where + " сноска")
 
 
 # --- Макеты: титул и разделы ------------------------------------------------
@@ -403,8 +440,8 @@ def guides(slide, ys=(380, 700), x=66, color=WHITE):
         line(slide, 0, y, 1130, y, color, 1.5, 0.35)
 
 
-def L_title(prs, s, n, where):
-    """Титульный: фон-паттерн направления, белый логотип, портрет справа (variant: photo | plain | split)."""
+def title_pattern(prs, s, n, where):
+    """Титульный (вариант pattern/split): фон-паттерн направления, белый логотип, портрет справа (variant: photo | plain | split)."""
     v = s.get("variant", "photo" if s.get("portrait") else "plain")
     sl = prs.slides.add_slide(prs.slide_layouts[6])
     bg = asset("bg", s.get("background") or CTX["direction"])
@@ -450,8 +487,8 @@ def bottom_caption(slide, s, where):
     text(slide, 84, 942, 800, 75, t, size=24, color=RETAIL, spacing=1.2, min_size=18, where=where)
 
 
-def L_section(prs, s, n, where):
-    """Разделительный: белое поле слева, справа диагональный срез с паттерном или фото."""
+def section_photo(prs, s, n, where):
+    """Разделительный с фото справа (вариант photo)."""
     sl = prs.slides.add_slide(prs.slide_layouts[6])
     img = asset("photo", s["photo"]) if s.get("photo") else asset("bg", s.get("background") or CTX["direction"])
     picture(sl, img, 860, 0, 1060, 1080, cover=True)
@@ -474,8 +511,8 @@ def L_toc(prs, s, n, where):
     rows = (len(items) + cols - 1) // cols
     gw, gh = 20, 20
     cw = (1800 - gw * (cols - 1)) / cols
-    ch = min(184, (1000 - top - gh * (rows - 1)) / rows)
-    y0 = top + max(0, (1000 - top) - rows * ch - (rows - 1) * gh) / 2 if s.get("center") else top + 120
+    ch = min(184, (BOTTOM - top - gh * (rows - 1)) / rows)
+    y0 = top + max(0, (BOTTOM - top) - rows * ch - (rows - 1) * gh) / 2 if s.get("center") else top + 120
     for i, it in enumerate(items):
         it = it if isinstance(it, dict) else {"title": it}
         x = 60 + (i % cols) * (cw + gw)
@@ -505,7 +542,7 @@ def L_bullets(prs, s, n, where):
     concl = s.get("conclusion")
     rows = len(items) + (1 if concl else 0)
     g = 20
-    h = (1000 - top - g * (rows - 1)) / rows
+    h = (BOTTOM - top - g * (rows - 1)) / rows
     for i, it in enumerate(items):
         it = it if isinstance(it, dict) else {"text": it}
         y = top + i * (h + g)
@@ -559,8 +596,8 @@ def card_head(sl, x, y, w, h, style, heading, icon=None, size=32, where=""):
          where=where)
 
 
-def L_cards(prs, s, n, where):
-    """2–4 вертикальные карточки: шапка (иконка + заголовок), текст или список, фото снизу по желанию."""
+def cards_header(prs, s, n, where):
+    """Вариант cards style=header — 2–4 вертикальные карточки: шапка (иконка + заголовок), текст или список, фото снизу по желанию."""
     sl, top = light_slide(prs, s, where, n)
     items = s["items"]
     k = len(items)
@@ -572,7 +609,7 @@ def L_cards(prs, s, n, where):
     for i, it in enumerate(items):
         x = 60 + i * (cw + g)
         style = header_style(i, k, s.get("highlight"))
-        body_bottom = 1000 - (photo_h + g if photo_h else 0)
+        body_bottom = BOTTOM - (photo_h + g if photo_h else 0)
         rect(sl, x, top, cw, body_bottom - top, CARD, radius=12)
         card_head(sl, x, top, cw, head_h, style, it.get("title", ""), it.get("icon"), size=hsz,
                   where=f"{where} карточка {i + 1}")
@@ -586,7 +623,7 @@ def L_cards(prs, s, n, where):
                  where=f"{where} карточка {i + 1}")
         if photo_h:
             if it.get("photo"):
-                picture(sl, asset("photo", it["photo"]), x, 1000 - photo_h, cw, photo_h, cover=True, radius=12)
+                picture(sl, asset("photo", it["photo"]), x, BOTTOM - photo_h, cw, photo_h, cover=True, radius=12)
     return sl
 
 
@@ -600,7 +637,7 @@ def L_process(prs, s, n, where):
     for i, it in enumerate(items):
         x = 60 + i * (cw + g)
         last = i == k - 1 and s.get("result", True)
-        rect(sl, x, top, cw, 1000 - top, CARD, radius=12)
+        rect(sl, x, top, cw, BOTTOM - top, CARD, radius=12)
         lab = it.get("label") or ("Результат" if last else f"Шаг {i + 1}")
         if last:
             rect(sl, x, top, cw, 74, grad=(T["grad"][0], T["grad"][1], (T["grad"][0], 0.3)), radius=12, top_only=True)
@@ -609,7 +646,7 @@ def L_process(prs, s, n, where):
         text(sl, x + 30, top, cw - 60, 74, lab, size=32, color=WHITE if last else TEXT, anchor="m", min_size=22)
         text(sl, x + 30, top + 104, cw - 60, 80, it.get("title", ""), size=28,
              color=T["accent"] if last else BLACK, min_size=20, where=f"{where} шаг {i + 1}")
-        text(sl, x + 30, top + 200, cw - 60, 1000 - top - 230, it.get("text", ""), size=24, color=TEXT,
+        text(sl, x + 30, top + 200, cw - 60, BOTTOM - top - 230, it.get("text", ""), size=24, color=TEXT,
              min_size=16, where=f"{where} шаг {i + 1}")
     return sl
 
@@ -623,7 +660,7 @@ def L_highlights(prs, s, n, where):
     rows = (k + cols - 1) // cols
     g = 20
     cw = (1800 - g * (cols - 1)) / cols
-    ch = (1000 - top - g * (rows - 1)) / rows
+    ch = (BOTTOM - top - g * (rows - 1)) / rows
     for i, it in enumerate(items):
         x = 60 + (i % cols) * (cw + g)
         y = top + (i // cols) * (ch + g)
@@ -649,14 +686,14 @@ def L_photo_text(prs, s, n, where):
     sl, top = light_slide(prs, s, where, n)
     left = s.get("photo_side", "right") == "left"
     cx, px = (970, 60) if left else (60, 970)
-    rect(sl, cx, top, 890, 1000 - top, CARD, radius=12)
+    rect(sl, cx, top, 890, BOTTOM - top, CARD, radius=12)
     hh = 70
     rect(sl, cx, top, 890, hh, grad=(T["grad"][0], T["grad"][1], (T["grad"][0], 0.35)), radius=12, top_only=True)
     text(sl, cx + 30, top, 830, hh, s.get("label", ""), size=28, color=WHITE, upper=True, anchor="m", min_size=20)
     items = s.get("items", [])
     k = max(1, len(items))
     y0 = top + hh + 30
-    rh = (1000 - y0 - 20) / k
+    rh = (BOTTOM - y0 - 20) / k
     for i, it in enumerate(items):
         it = it if isinstance(it, dict) else {"text": it}
         y = y0 + i * rh
@@ -666,7 +703,7 @@ def L_photo_text(prs, s, n, where):
             tx = cx + 108
         text(sl, tx, y, cx + 860 - tx, rh - 12, it["text"], size=26, color=TEXT, min_size=16,
              where=f"{where} пункт {i + 1}")
-    picture(sl, asset("photo", s["photo"]), px, top, 890, 1000 - top, cover=True, radius=12)
+    picture(sl, asset("photo", s["photo"]), px, top, 890, BOTTOM - top, cover=True, radius=12)
     return sl
 
 
@@ -676,7 +713,7 @@ def L_menu_photo(prs, s, n, where):
     items = s["items"]
     k = len(items)
     g = 20
-    h = (1000 - top - g * (k - 1)) / k
+    h = (BOTTOM - top - g * (k - 1)) / k
     for i, it in enumerate(items):
         y = top + i * (h + g)
         hl = it.get("highlight", i == k - 1)
@@ -690,11 +727,11 @@ def L_menu_photo(prs, s, n, where):
              anchor="b", min_size=24, where=f"{where} пункт {i + 1}")
         text(sl, 180, y + h * 0.5 + 8, 540, h * 0.5 - 28, it.get("text", ""), size=24,
              color=WHITE if hl else TEXT, min_size=16, where=f"{where} пункт {i + 1}")
-    picture(sl, asset("photo", s["photo"]), 770, top, 1090, 1000 - top, cover=True, radius=12)
+    picture(sl, asset("photo", s["photo"]), 770, top, 1090, BOTTOM - top, cover=True, radius=12)
     return sl
 
 
-def L_table(prs, s, n, where):
+def table_blocks(prs, s, n, where):
     """Таблица: шапка Retail Blue / Medium Blue / Cyan / серый, зебра, выделенные строки — синим текстом.
     side — карточка справа с цифрой и текстом, note — плашка-вывод под таблицей."""
     sl, top = light_slide(prs, s, where, n)
@@ -702,7 +739,7 @@ def L_table(prs, s, n, where):
     side, note = s.get("side"), s.get("note")
     tw = 1435 if side else 1800
     nh = 120 if note else 0
-    avail = 1000 - top - (nh + 20 if note else 0)
+    avail = BOTTOM - top - (nh + 20 if note else 0)
     nr = len(rows_) + 1
     rh = min(74, avail / nr)
     fs = 28 if rh >= 64 else 24 if rh >= 52 else 20
@@ -751,18 +788,16 @@ def L_table(prs, s, n, where):
                 REPORT.append(f"{where}: ячейка [{r},{j}] переносится — строка станет выше, проверьте высоту таблицы")
     if side:
         x = 1515
-        rect(sl, x, top, 345, 1000 - top - (nh + 20 if note else 0), grad=("9DDDFF", "1E4BD2"), radius=12, angle=90)
+        rect(sl, x, top, 345, BOTTOM - top - (nh + 20 if note else 0), grad=("9DDDFF", "1E4BD2"), radius=12, angle=90)
         text(sl, x + 30, top + 30, 285, 110, side.get("value", ""), size=82, color=WHITE, light=True, spacing=1.0,
              min_size=48)
-        text(sl, x + 30, top + 160, 285, 1000 - top - 200 - (nh + 20 if note else 0), side.get("text", ""),
+        text(sl, x + 30, top + 160, 285, BOTTOM - top - 200 - (nh + 20 if note else 0), side.get("text", ""),
              size=24, color=WHITE, min_size=16, where=where + " боковая карточка")
     if note:
-        y = 1000 - nh
+        y = BOTTOM - nh
         rect(sl, 60, y, 1000, nh, grad=(T["grad"][0], T["grad"][1], (T["grad"][0], 0.35)), radius=12)
         text(sl, 90, y + 14, 940, nh - 28, note, size=24, color=WHITE, anchor="m", min_size=16,
              where=where + " вывод")
-    if s.get("source"):
-        text(sl, 60, 1010, 1500, 40, f"Источник: {s['source']}", size=16, color=GREY, min_size=16)
     return sl
 
 
@@ -796,7 +831,7 @@ def chart(sl, x, y, w, h, c):
     ch.font.size = Pt(18)
     ch.font.name = FONT
     ch.font.color.rgb = rgb(TEXT)
-    pal = T["chart"]
+    pal = c.get("palette") or T["chart"]
     multi = len(c["series"]) > 1 or kind in ("donut", "pie")
     ch.has_legend = multi
     if multi:
@@ -852,7 +887,7 @@ def chart(sl, x, y, w, h, c):
 LINE_C = "DDE2EC"
 
 
-def L_chart(prs, s, n, where):
+def chart_cards(prs, s, n, where):
     """1–2 карточки с графиком (родные диаграммы PowerPoint — правятся в Excel) + плашка-вывод."""
     sl, top = light_slide(prs, s, where, n)
     charts = s["charts"]
@@ -861,7 +896,7 @@ def L_chart(prs, s, n, where):
     note = s.get("note")
     nh = 150 if note else 0
     cw = (1800 - g * (k - 1)) / k
-    ch_h = 1000 - top - (nh + g if note else 0)
+    ch_h = BOTTOM - top - (nh + g if note else 0)
     for i, c in enumerate(charts):
         x = 60 + i * (cw + g)
         rect(sl, x, top, cw, ch_h, CARD, radius=12)
@@ -870,7 +905,7 @@ def L_chart(prs, s, n, where):
                   where=f"{where} график {i + 1}")
         chart(sl, x + 20, top + 110, cw - 40, ch_h - 130, c)
     if note:
-        y = 1000 - nh
+        y = BOTTOM - nh
         rect(sl, 60, y, 1800, nh, CARD, radius=12)
         tx = 90
         if s.get("note_icon"):
@@ -881,34 +916,6 @@ def L_chart(prs, s, n, where):
             text(sl, tx, y + 20, 1700, 46, head, size=30, color=T["accent"], min_size=22)
         text(sl, 90, y + (72 if head else 20), 1740, nh - (90 if head else 40), note, size=22, color=TEXT,
              min_size=16, where=where + " вывод")
-    if s.get("source"):
-        text(sl, 60, 1010, 1500, 40, f"Источник: {s['source']}", size=16, color=GREY, min_size=16)
-    return sl
-
-
-def L_stats(prs, s, n, where):
-    """Большие цифры (до 120 pt) с подписями в одну строку; note — вывод на плашке второго цвета снизу."""
-    sl, top = light_slide(prs, s, where, n)
-    items = s["items"]
-    k = len(items)
-    g = 20
-    cw = (1800 - g * (k - 1)) / k
-    ch = 382
-    for i, it in enumerate(items):
-        x = 60 + i * (cw + g)
-        rect(sl, x, top, cw, ch, CARD, radius=12)
-        unit = f"<g>{it['unit']}</g>" if it.get("unit") else ""
-        text(sl, x + 40, top + 30, cw - 80, 150, f"{it['value']}{unit}", size=120, color=T["accent"], light=True,
-             spacing=1.0, min_size=60, where=f"{where} цифра {i + 1}")
-        text(sl, x + 40, top + 200, cw - 80, ch - 230, it.get("text", ""), size=28, color=TEXT, min_size=16,
-             where=f"{where} цифра {i + 1}")
-    y = top + ch + g
-    if s.get("note"):
-        rect(sl, 60, y, 1800, 1000 - y, CARD, radius=12)
-        text(sl, 100, y + 40, 1720, 1000 - y - 80, s["note"], size=32, color=TEXT, anchor="m", min_size=20,
-             where=where + " вывод")
-    if s.get("source"):
-        text(sl, 60, 1010, 1500, 40, f"Источник: {s['source']}", size=16, color=GREY, min_size=16)
     return sl
 
 
@@ -988,7 +995,7 @@ def L_scheme(prs, s, n, where):
             line(sl, x + w / 2, y + mh, x + w / 2, y + mh + 40, "AEB8C8", 2)
         y += mh + 40
     if bottom:
-        bh = max(110, 1000 - y)
+        bh = max(110, BOTTOM - y)
         bh = min(bh, 140)
         rect(sl, 60, y, 1800, bh, grad=(T["grad"][0], T["grad"][1], (T["grad"][0], 0.3)), radius=12)
         text(sl, 100, y + 10, 1720, bh - 20, bottom, size=26, color=WHITE, align="c", anchor="m", min_size=16,
@@ -996,84 +1003,492 @@ def L_scheme(prs, s, n, where):
     return sl
 
 
+def L_image(prs, s, n, where):
+    """Фото во всю рабочую область с заголовком."""
+    sl, top = light_slide(prs, s, where, n)
+    picture(sl, asset("photo", s["photo"]), 60, top, 1800, BOTTOM - top, cover=True, radius=12)
+    return sl
+
+
+# --- Макеты по образцу презентации «ШОиФД 2.0» (октябрь 2026) ---------------
+# Общие правила этого стиля: белый фон; заголовок-вывод 64 pt; контент прижат к низу (y = 976);
+# между шапкой и контентом — свободное поле; серые карточки F4F6FA без шапок; акцентный цвет — Retail Blue.
+
+TITLE_DIAG = (1196, 823)    # диагональ панели титула: x вверху, x внизу
+SECTION_DIAG = (906, 696)   # диагональ панели раздела
+
+
+def diag_panel(sl, diag, portrait=None, background=None):
+    """Справа — градиентная панель с диагональным срезом; портрет (вырезанный PNG) обрезается той же диагональю."""
+    x_top, x_bot = diag
+    left = min(x_top, x_bot) - 2
+    bg = asset("bg", background) if background else A / "backgrounds" / "panel-vtb.jpg"
+    if not bg.exists():
+        bg = asset("bg", CTX["direction"])
+    picture(sl, bg, left, 0, W - left, H, cover=True)
+    if portrait:
+        p = asset("portrait", portrait)
+        iw, ih = Image.open(p).size
+        ph = 1154
+        pw = ph * iw / ih
+        picture(sl, p, x_bot + 50 + (1154 - pw) / 2, 54, pw, ph)
+    polygon(sl, [(left - 2, -2), (x_top, -2), (x_bot, H + 2), (left - 2, H + 2)], WHITE)
+
+
+def cover_text(sl, s, where, width, kicker_size=40, title_size=82):
+    """Серый надзаголовок 40 pt + заголовок 82 pt; блок заканчивается на y ≈ 730."""
+    t = s.get("title", "")
+    n, th = measure(t, title_size, width, upper=True, spacing=1.1)
+    th = min(th, title_size * 1.1 * 4)
+    ty = 450 if n <= 3 else 730 - th
+    if s.get("kicker"):
+        kn, kh = measure(s["kicker"], kicker_size, width, upper=True, spacing=1.0)
+        text(sl, 60, ty - 12 - kh, width, kh + 4, s["kicker"], size=kicker_size, color=GREY, upper=True,
+             spacing=1.0, min_size=28, where=where + " надзаголовок")
+    text(sl, 60, ty, width, th + 10, t, size=title_size, color=BLACK, upper=True, spacing=1.1, min_size=56,
+         where=where + " заголовок")
+
+
+def L_title(prs, s, n, where):
+    """Титульный. variant: diagonal (по умолчанию) — белое поле, справа панель с портретом;
+    pattern / split — фон-паттерн направления (стр. 9–12 мастер-шаблона)."""
+    v = s.get("variant", "diagonal")
+    if v in ("pattern", "photo", "plain", "split"):
+        if v == "pattern":
+            s = {**s, "variant": "photo" if s.get("portrait") else "plain"}
+        return title_pattern(prs, s, n, where)
+    sl = prs.slides.add_slide(prs.slide_layouts[6])
+    diag_panel(sl, TITLE_DIAG, s.get("portrait", "vtb-2"), s.get("background"))
+    w = logo(sl, 60, 60, "color")
+    partner(sl, s, 60 + w + 26, 60)
+    cover_text(sl, s, where, 900)
+    bottom_caption(sl, s, where)
+    page_no(sl, n)
+    return sl
+
+
+def L_section(prs, s, n, where):
+    """Раздел: белое поле, надзаголовок + заголовок 82 pt, справа панель с диагональю. photo — вариант с фото."""
+    if s.get("photo"):
+        return section_photo(prs, s, n, where)
+    sl = prs.slides.add_slide(prs.slide_layouts[6])
+    diag_panel(sl, SECTION_DIAG, background=s.get("background"))
+    w = logo(sl, 60, 60, "color")
+    partner(sl, s, 60 + w + 26, 60)
+    t = s.get("title", "")
+    if s.get("num"):
+        s = {**s, "title": f"<b>{s['num']}</b> {t}"}
+    cover_text(sl, s, where, 760)
+    bottom_caption(sl, s, where)
+    page_no(sl, n)
+    return sl
+
+
+def _item_text(it):
+    """Пункт списка: строка или {term, text} → «<s>Термин.</s> пояснение»."""
+    if isinstance(it, dict):
+        term = it.get("term", "")
+        return (f"<s>{term}</s> " if term else "") + it.get("text", "")
+    return str(it)
+
+
+def dot_list(sl, x, y, w, h, items, size=24, where="", gap=0.35):
+    """Список с синими точками-маркерами (как в слайдах «Базовый/Расширенный формат»)."""
+    lines = [f"<b>•</b> {_item_text(it)}" for it in items]
+    tb = text(sl, x, y, w, h, "\n".join(lines), size=size, color=TEXT, where=where, spacing=1.2,
+              accent=MEDIUM)
+    for p in tb.text_frame.paragraphs[1:]:
+        p.space_before = Pt(size * gap)
+    return tb
+
+
+def card_height(items, cw, pad=38):
+    hs = []
+    for it in items:
+        h = pad
+        if it.get("title"):
+            h += measure(it["title"], 36, cw - 2 * pad, spacing=1.2)[1] + 16
+        if it.get("items"):
+            h += sum(measure("• " + _item_text(x), 24, cw - 2 * pad - 30)[1] + 9 for x in it["items"])
+        elif it.get("text"):
+            h += measure(it["text"], 28, cw - 2 * pad)[1]
+        hs.append(h + pad)
+    return max(hs) if hs else 260
+
+
+def L_cards(prs, s, n, where):
+    """Серые карточки (style: simple — по умолчанию): заголовок 36 pt + текст 28 pt или список.
+    Карточки одной высоты, прижаты к низу слайда. style: header — карточки со шапками и иконками."""
+    if s.get("style") == "header":
+        return cards_header(prs, s, n, where)
+    sl, top = light_slide(prs, s, where, n)
+    items = s["items"]
+    k = len(items)
+    g = 20
+    cw = (1800 - g * (k - 1)) / k
+    ch = s.get("height") or max(260, card_height(items, cw))
+    ch = min(ch, BOTTOM - top)
+    y = BOTTOM - ch
+    for i, it in enumerate(items):
+        x = 60 + i * (cw + g)
+        hl = s.get("highlight") == i or it.get("highlight")
+        if hl:
+            rect(sl, x, y, cw, ch, grad=("5FABF2", "1C4FD2"), radius=12, angle=90)
+        else:
+            rect(sl, x, y, cw, ch, CARD, radius=12)
+        ty = y + 38
+        col = WHITE if hl else DARK
+        if it.get("title"):
+            th = measure(it["title"], 36, cw - 76, bold=True)[1]
+            text(sl, x + 38, ty, cw - 76, th + 4, it["title"], size=36, color=col, min_size=26,
+                 where=f"{where} карточка {i + 1}", bold=True)
+            ty += th + 16
+        if it.get("items"):
+            dot_list(sl, x + 38, ty, cw - 76, y + ch - 30 - ty, it["items"], where=f"{where} карточка {i + 1}")
+        elif it.get("text"):
+            text(sl, x + 38, ty, cw - 76, y + ch - 30 - ty, it["text"], size=28, color=WHITE if hl else TEXT,
+                 min_size=18, where=f"{where} карточка {i + 1}")
+    return sl
+
+
+def L_stats(prs, s, n, where):
+    """Крупные цифры: 96 pt Retail Blue, единица 40 pt рядом («80 из 89», «17 стран»), подпись 28 pt внизу ячейки.
+    3 в ряд; 4–6 цифр — в две строки. Блок прижат к низу."""
+    sl, top = light_slide(prs, s, where, n)
+    items = s["items"]
+    k = len(items)
+    cols = s.get("columns") or (k if k <= 3 else 3)
+    rows = (k + cols - 1) // cols
+    g = 20
+    cw = (1800 - g * (cols - 1)) / cols
+    ch = s.get("height") or 259
+    y0 = BOTTOM - rows * ch - (rows - 1) * g
+    if y0 < top:
+        ch = (BOTTOM - top - (rows - 1) * g) / rows
+        y0 = top
+    for i, it in enumerate(items):
+        x = 60 + (i % cols) * (cw + g)
+        y = y0 + (i // cols) * (ch + g)
+        rect(sl, x, y, cw, ch, CARD, radius=12)
+        val = str(it["value"])
+        tb = slide_value(sl, x + 38, y + 8, cw - 76, 125, val, it.get("unit"), after=it.get("after"))
+        text(sl, x + 38, y + ch * 0.5, cw - 76, ch * 0.5 - 32, it.get("text", ""), size=28, color=TEXT,
+             anchor="b", min_size=18, where=f"{where} цифра {i + 1}")
+    return sl
+
+
+def slide_value(sl, x, y, w, h, value, unit=None, size=96, unit_size=40, after=None):
+    """Число + единица меньшим кеглем (+ второе крупное число: «80 из 89») одним текстовым блоком."""
+    tb = sl.shapes.add_textbox(E(x), E(y), E(w), E(h))
+    tf = tb.text_frame
+    tf.word_wrap = True
+    tf.auto_size = MSO_AUTO_SIZE.NONE
+    tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
+    p = tf.paragraphs[0]
+    p.alignment = PP_ALIGN.LEFT
+    parts = ((typo(str(value)), size), ((" " + typo(str(unit)) + (" " if after else "")) if unit else "", unit_size),
+             (typo(str(after)) if after else "", size))
+    for t, sz in parts:
+        if not t:
+            continue
+        r = p.add_run()
+        r.text = t
+        r.font.size = Pt(sz)
+        r.font.name = FONT
+        r.font.color.rgb = rgb(RETAIL)
+    return tb
+
+
+def L_speakers(prs, s, n, where):
+    """Спикеры: карточки 3×2 — фото 163×163 со скруглением, имя 36 pt Retail Blue прописными, должность 24 pt.
+    Без фото — серая заглушка. Блок прижат к низу."""
+    sl, top = light_slide(prs, s, where, n)
+    items = s["items"]
+    k = len(items)
+    cols = s.get("columns") or (k if k <= 3 else 3 if k in (5, 6, 9) else 4)
+    rows = (k + cols - 1) // cols
+    g = 20
+    cw = (1800 - g * (cols - 1)) / cols
+    ch = 231
+    y0 = max(top, BOTTOM - rows * ch - (rows - 1) * g)
+    for i, it in enumerate(items):
+        x = 60 + (i % cols) * (cw + g)
+        y = y0 + (i // cols) * (ch + g)
+        rect(sl, x, y, cw, ch, CARD, radius=12)
+        ps = 163
+        if it.get("photo"):
+            rect(sl, x + 30, y + 34, ps, ps, WHITE, radius=16)
+            picture(sl, asset("photo", it["photo"]), x + 30, y + 34, ps, ps, cover=True, radius=16, focus="top")
+        else:
+            rect(sl, x + 30, y + 34, ps, ps, CARD_HEAD, radius=16)
+            icon_pic(sl, "people", x + 30 + ps / 2 - 36, y + 34 + ps / 2 - 36, 72)
+        tx, tw = x + 213, cw - 213 - 20
+        nh = 36  # имя — в одну строку, при нехватке места кегль уменьшается
+        role_h = measure(it.get("role", ""), 24, tw)[1] if it.get("role") else 0
+        ty = y + max(20, (ch - nh - 8 - role_h) / 2)
+        text(sl, tx, ty, tw, nh + 4, it["name"], size=36, color=RETAIL, upper=True, spacing=1.0, min_size=24,
+             where=f"{where} спикер {i + 1}", bold=True)
+        if it.get("role"):
+            text(sl, tx, ty + nh + 8, tw, y + ch - 14 - (ty + nh + 8), it["role"], size=24, color=DARK,
+                 min_size=16, where=f"{where} спикер {i + 1}")
+    return sl
+
+
+def L_features(prs, s, n, where):
+    """Компетенции: слева высокая градиентная карточка (заголовок + белая иконка внизу),
+    справа сетка 3×2 серых ячеек с текстом 24 pt. Блок прижат к низу."""
+    sl, top = light_slide(prs, s, where, n)
+    items = s["items"]
+    lead = s.get("card", {})
+    g = 20
+    cols = s.get("columns") or 3
+    rows = (len(items) + cols - 1) // cols
+    total_h = min(586, BOTTOM + 9 - top)
+    y0 = BOTTOM + 9 - total_h
+    lw = 440 if lead else 0
+    rect(sl, 60, y0, lw, total_h, grad=("5FABF2", "1C4FD2"), radius=12, angle=90) if lead else None
+    if lead:
+        text(sl, 100, y0 + 30, lw - 80, 220, lead.get("title", ""), size=28, color=WHITE, bold=True, min_size=20,
+             where=where + " карточка")
+        if lead.get("icon"):
+            icon_pic(sl, lead["icon"], 100, y0 + total_h - 160, 120, white=True)
+    gx = 60 + (lw + g if lead else 0)
+    cw = (1860 - gx - g * (cols - 1)) / cols
+    chh = (total_h - g * (rows - 1)) / rows
+    for i, it in enumerate(items):
+        x = gx + (i % cols) * (cw + g)
+        y = y0 + (i // cols) * (chh + g)
+        rect(sl, x, y, cw, chh, CARD, radius=12)
+        text(sl, x + 40, y + 40, cw - 80, chh - 70, _item_text(it), size=24, color=TEXT, min_size=16,
+             where=f"{where} ячейка {i + 1}")
+    return sl
+
+
+def icon_watermark(sl, name, x, y, size, opacity=0.3):
+    """Крупная белая иконка-водяной знак на градиентной метке."""
+    p = asset("icon", name)
+    wp = p.with_name(p.stem + "-white.png")
+    pic = sl.shapes.add_picture(str(wp if wp.exists() else p), E(x), E(y), E(size), E(size))
+    blip = pic._element.blipFill.find(qn("a:blip"))
+    am = etree.SubElement(blip, qn("a:alphaModFix"))
+    am.set("amt", str(int(opacity * 100000)))
+    return pic
+
+
+def L_rows(prs, s, n, where):
+    """Строки «метка → содержание» (слайды форматов): слева градиентная метка 525 px с белым заголовком 28 pt
+    и иконкой-водяным знаком, справа серое поле со списком в 1–2 колонки (24 pt, синие точки). Прижато к низу."""
+    sl, top = light_slide(prs, s, where, n)
+    rows_ = s["rows"]
+    k = len(rows_)
+    g = 20
+    lw = 525
+    def colw_of(cols):
+        return (1800 - lw - 55 - 40 - 40 * (cols - 1)) / cols
+
+    hs = []
+    for r in rows_:
+        cols = r.get("columns", s.get("columns", 2))
+        colw = colw_of(cols)
+        items = r.get("items", [])
+        per = (len(items) + cols - 1) // cols if items else 0
+        col_h = []
+        for c in range(cols):
+            part = items[c * per:(c + 1) * per]
+            col_h.append(sum(measure("• " + _item_text(x), 24, colw - 25)[1] + 8 for x in part))
+        body = max(col_h) if items else measure(r.get("text", ""), 24, 1800 - lw - 110)[1]
+        hs.append(max(179, body + 50))
+    total = sum(hs) + g * (k - 1)
+    if total > BOTTOM - top:
+        REPORT.append(f"{where}: строки не помещаются ({int(total)} px при {BOTTOM - top} доступных) — сократите текст")
+    y = max(top, BOTTOM - total)
+    for r, h in zip(rows_, hs):
+        rect(sl, 60, y, 1800, h, CARD, radius=12)
+        rect(sl, 60, y, lw + 24, h, grad=(MEDIUM, "8AC2F5"), radius=12)
+        rect(sl, 60 + lw, y, 30, h, CARD)  # стык с серым полем — прямой угол
+        if r.get("icon"):
+            icon_watermark(sl, r["icon"], 60 + lw - 170, y + h - 150 if h > 170 else y + 10, 150)
+        text(sl, 90, y + 20, lw - 200, h - 40, r.get("label", ""), size=28, color=WHITE, min_size=20,
+             where=f"{where} метка")
+        items = r.get("items", [])
+        cols = r.get("columns", s.get("columns", 2))
+        colw = colw_of(cols)
+        if items:
+            per = (len(items) + cols - 1) // cols
+            for c in range(cols):
+                part = items[c * per:(c + 1) * per]
+                if part:
+                    dot_list(sl, 60 + lw + 35 + c * (colw + 40), y + 22, colw, h - 34, part, where=f"{where} строка")
+        elif r.get("text"):
+            text(sl, 60 + lw + 35, y + 22, 1800 - lw - 70, h - 34, r["text"], size=24, color=TEXT, min_size=16,
+                 where=f"{where} строка")
+        y += h + g
+    return sl
+
+
+def cell_border(cell, color=LINE_T, w=1):
+    tcPr = cell._tc.get_or_add_tcPr()
+    for tag in ("a:lnL", "a:lnR", "a:lnT", "a:lnB"):
+        ln = etree.SubElement(tcPr, qn(tag))
+        ln.set("w", str(int(w * PX)))
+        sf = etree.SubElement(ln, qn("a:solidFill"))
+        c = etree.SubElement(sf, qn("a:srgbClr"))
+        c.set("val", color)
+    for f in [e for e in tcPr if e.tag in (qn("a:solidFill"), qn("a:noFill"))]:
+        tcPr.remove(f)
+        tcPr.append(f)
+
+
+def L_table(prs, s, n, where):
+    """Таблица: шапка на градиенте Medium Blue → голубой, белый текст 28 pt; строки 74 px, тонкие серые линии,
+    зебра; highlight_rows — полужирным на EAEDF5. Таблица встаёт сразу под шапку слайда.
+    style: blocks — прежняя шапка цветными блоками."""
+    if s.get("style") == "blocks":
+        return table_blocks(prs, s, n, where)
+    sl, top = light_slide(prs, s, where, n)
+    headers, rows_ = s["headers"], s["rows"]
+    nr = len(rows_) + 1
+    avail = BOTTOM - top
+    rh = min(74, avail / nr)
+    fs = 28 if rh >= 64 else 24 if rh >= 52 else 20
+    tw = 1800
+    y = top if s.get("align_top", True) else BOTTOM - rh * nr
+    rect(sl, 60, y, tw, rh, grad=(MEDIUM, "8EC5F6"), radius=12, top_only=True)
+    shape = sl.shapes.add_table(nr, len(headers), E(60), E(y), E(tw), E(rh * nr))
+    tbl = shape.table
+    st = shape._element.graphic.graphicData.tbl.tblPr.find(qn("a:tableStyleId"))
+    if st is not None:
+        st.text = "{5940675A-B579-460E-94D1-54222C63F5DA}"
+    widths = s.get("widths")
+    for j in range(len(headers)):
+        tbl.columns[j].width = E(widths[j] if widths else (tw * (0.6 if j == 0 else 0.4 / (len(headers) - 1))))
+    for r in range(nr):
+        tbl.rows[r].height = E(rh)
+    align = s.get("align", [])
+    hl_rows = set(s.get("highlight_rows", []))
+    for r in range(nr):
+        for j in range(len(headers)):
+            c = tbl.cell(r, j)
+            c.margin_left = c.margin_right = E(16)
+            c.margin_top = c.margin_bottom = E(2)
+            c.vertical_anchor = MSO_ANCHOR.MIDDLE
+            hl = r > 0 and (r - 1) in hl_rows
+            if r == 0:
+                c.fill.background()
+                val, col = headers[j], WHITE
+            else:
+                c.fill.solid()
+                c.fill.fore_color.rgb = rgb(CARD_HEAD if hl else (WHITE if r % 2 else "F4F6F9"))
+                val, col = rows_[r - 1][j], RETAIL if hl else "2B2F36"
+            if r > 0:
+                cell_border(c)
+            else:
+                no_borders(c)
+            tf = c.text_frame
+            tf.word_wrap = True
+            a = align[j] if j < len(align) else ("l" if j == 0 else "c")
+            for li, part in enumerate(str(val).split("\n")):
+                p = tf.paragraphs[0] if li == 0 else tf.add_paragraph()
+                p.alignment = {"l": PP_ALIGN.LEFT, "c": PP_ALIGN.CENTER, "r": PP_ALIGN.RIGHT}[a[0]]
+                run = p.add_run()
+                run.text = typo(plain(part))
+                run.font.size = Pt(fs if li == 0 else 14)
+                run.font.name = FONT
+                run.font.bold = hl
+                run.font.color.rgb = rgb(col)
+            if measure(plain(str(val)).split("\n")[0], fs, tbl.columns[j].width / PX - 32)[0] > 1:
+                REPORT.append(f"{where}: ячейка [{r},{j}] переносится — строка станет выше, проверьте высоту таблицы")
+    return sl
+
+
+def L_chart(prs, s, n, where):
+    """График без карточки (по умолчанию): легенда сверху слева, подписи значений, источник — сноской.
+    style: cards — 1–2 графика в карточках со шапками."""
+    if s.get("style") == "cards" or len(s.get("charts", [])) > 1:
+        return chart_cards(prs, s, n, where)
+    sl, top = light_slide(prs, s, where, n)
+    c = dict(s["charts"][0])
+    c.setdefault("palette", [RETAIL, "2E7DEE", "B8CFF1", GREY])
+    bottom = BOTTOM - (60 if (s.get("source") or s.get("footnote")) else 0)
+    if c.get("title"):
+        text(sl, 60, top, 1200, 30, c["title"], size=18, color=TEXT, min_size=14)
+        top += 34
+    ch = chart(sl, 40, top, 1840, bottom - top, c)
+    if ch.has_legend:
+        ch.legend.position = XL_LEGEND_POSITION.TOP
+        ch.legend.include_in_layout = True
+    return sl
+
+
+def L_course(prs, s, n, where):
+    """Страница курса: надзаголовок «ШОиФД-N, сезон», название 64 pt, описание 32 pt серо-синим;
+    внизу две карточки — слева темы (<s>термин.</s> пояснение), справа «Для кого этот курс?» и результат."""
+    s = {**s}
+    desc = s.pop("description", None)
+    sl, top = light_slide(prs, {**s, "subtitle": desc}, where, n)
+    topics = s.get("topics", [])
+    right = s.get("audience")
+    g = 20
+    cw = (1800 - g) / 2
+    lh = sum(measure("• " + _item_text(t), 24, cw - 76 - 25)[1] + 8 for t in topics) + 76
+    rtxt = ""
+    if right:
+        rtxt = "<s>" + right.get("title", "Для кого этот курс?") + "</s>\n\n" + right.get("text", "")
+        if right.get("result"):
+            rtxt += "\n\n" + right["result"]
+    rh = measure(plain(rtxt), 24, cw - 76)[1] + 76 if rtxt else 0
+    ch = max(lh, rh, 220)
+    if ch > BOTTOM - top:
+        REPORT.append(f"{where}: карточки курса выше доступного места — сократите описание или темы")
+        ch = BOTTOM - top
+    y = BOTTOM - ch
+    rect(sl, 60, y, cw, ch, CARD, radius=12)
+    dot_list(sl, 98, y + 38, cw - 76, ch - 60, topics, size=24, where=where + " темы", gap=0.1)
+    if rtxt:
+        rect(sl, 60 + cw + g, y, cw, ch, CARD, radius=12)
+        text(sl, 98 + cw + g, y + 38, cw - 76, ch - 60, rtxt, size=24, color=TEXT, min_size=16,
+             where=where + " для кого")
+    return sl
+
+
 def L_contacts(prs, s, n, where):
-    """Контакты: карточки людей (ФИО 62 pt прописными, должность, телефон, почта) + QR справа."""
-    s = {**s, "title": s.get("title", "Контакты")}
+    """Контакты: заголовок 82 pt, без логотипа; карточки на всю ширину — круглое фото, ФИО 62 pt прописными,
+    должность, почта с иконкой. Первая карточка — на фирменном градиенте."""
+    s = {**s, "title": s.get("title", "Контакты"), "title_size": 82, "logo": s.get("logo", False)}
     sl, top = light_slide(prs, s, where, n)
     people = s["people"][:3]
     k = len(people)
     g = 20
-    ch = (1000 - top - g * (k - 1)) / k
+    ch = min(382, (BOTTOM - 217 - g * (k - 1)) / k)
+    y0 = max(217, BOTTOM - k * ch - (k - 1) * g) if k > 1 else 217
     for i, p in enumerate(people):
-        y = top + i * (ch + g)
+        y = y0 + i * (ch + g)
         first = i == 0
-        has_qr = bool(p.get("qr"))
-        cw = 1435 if has_qr else 1800
         if first:
-            rect(sl, 60, y, cw, ch, grad=("30B6FD", "1B47CF", ("1E4BD2", 0.45)), radius=12)
+            picture(sl, A / "backgrounds" / "vtb.jpg", 60, y, 1800, ch, cover=True, radius=12)
         else:
-            rect(sl, 60, y, cw, ch, CARD_HEAD, radius=12)
-        c1 = WHITE if first else RETAIL
-        c2 = WHITE if first else GREY
-        text(sl, 100, y + 30, cw - 80, 80, p["name"], size=62 if k <= 2 else 48, color=c1, upper=True,
-             spacing=1.0, min_size=36, where=f"{where} {i + 1}")
-        text(sl, 100, y + 110, cw - 80, 56, p.get("role", ""), size=42 if k <= 2 else 32, color=c2, min_size=24)
-        cy = y + ch - 70
-        for j, (key, ic) in enumerate((("phone", "phone"), ("email", "mail"))):
+            rect(sl, 60, y, 1800, ch, CARD_HEAD, radius=12)
+        c1 = WHITE if first else DARK
+        c2 = WHITE if first else TEXT
+        px = 100
+        if p.get("photo"):
+            ph = 168
+            pic = picture(sl, asset("photo", p["photo"]), px, y + 40, ph, ph, cover=True, focus="top")
+            pic.auto_shape_type = MSO_SHAPE.OVAL
+            tx = px + ph + 40
+        else:
+            tx = px
+        text(sl, tx, y + 52, 1860 - tx - 40, 80, p["name"], size=62, color=c1, upper=True, spacing=1.0,
+             min_size=40, where=f"{where} {i + 1}")
+        if p.get("role"):
+            text(sl, tx, y + 132, 1860 - tx - 40, 56, p["role"], size=40, color=c2, min_size=24)
+        cy = y + ch - 80
+        xx = 100
+        for key, ic in (("email", "mail"), ("phone", "phone")):
             if p.get(key):
-                xx = 100 + j * 520
-                if (A / "icons" / f"{ic}.png").exists():
-                    icon_pic(sl, ic, xx, cy, 40, white=first)
-                text(sl, xx + 60, cy, 440, 44, p[key], size=24, color=c1, anchor="m", min_size=18)
-        if has_qr:
-            rect(sl, 1515, y, 345, ch, WHITE if first else CARD, radius=12, line=("DDE2EC", 1.5) if first else None)
-            q = Path(p["qr"]) if Path(p["qr"]).is_absolute() else CTX["base"] / p["qr"]
-            sz = min(255, ch - 90)
-            picture(sl, q, 1515 + (345 - sz) / 2, y + 24, sz, sz)
-            text(sl, 1535, y + ch - 60, 305, 40, p.get("qr_caption", ""), size=20, color=GREY, align="c",
-                 min_size=16)
-    return sl
-
-
-def L_speakers(prs, s, n, where):
-    """Спикеры: сетка карточек — фото (или серая заглушка с иконкой), имя, должность."""
-    sl, top = light_slide(prs, s, where, n)
-    items = s["items"]
-    k = len(items)
-    cols = s.get("columns") or (k if k <= 4 else 3 if k in (5, 6, 9) else 4)
-    rows = (k + cols - 1) // cols
-    g = 20
-    cw = (1800 - g * (cols - 1)) / cols
-    ch = (1000 - top - g * (rows - 1)) / rows
-    side = cols >= 3 and rows >= 2  # мало места по высоте — фото слева, текст справа
-    for i, it in enumerate(items):
-        x = 60 + (i % cols) * (cw + g)
-        y = top + (i // cols) * (ch + g)
-        rect(sl, x, y, cw, ch, CARD, radius=12)
-        if side:
-            pw, ph, px, py = min(ch, cw * 0.42), ch, x, y
-            tx, ty, tw = x + pw + 30, y + 30, cw - pw - 50
-        else:
-            pw, ph, px, py = cw, ch * 0.62, x, y
-            tx, ty, tw = x + 30, y + ph + 24, cw - 60
-        if it.get("photo"):
-            picture(sl, asset("photo", it["photo"]), px, py, pw, ph, cover=True, radius=12)
-        else:
-            rect(sl, px, py, pw, ph, CARD_HEAD, radius=12)
-            icon_pic(sl, "people", px + pw / 2 - 40, py + ph / 2 - 40, 80)
-        th = (y + ch - 24) - ty
-        text(sl, tx, ty, tw, min(90, th * 0.45), it["name"], size=32, color=BLACK, min_size=22,
-             where=f"{where} спикер {i + 1}")
-        if it.get("role"):
-            text(sl, tx, ty + min(90, th * 0.45) + 8, tw, th - min(90, th * 0.45) - 8, it["role"], size=22,
-                 color=TEXT, min_size=16, where=f"{where} спикер {i + 1}")
-    return sl
-
-
-def L_image(prs, s, n, where):
-    """Фото во всю рабочую область с заголовком."""
-    sl, top = light_slide(prs, s, where, n)
-    picture(sl, asset("photo", s["photo"]), 60, top, 1800, 1000 - top, cover=True, radius=12)
+                icon_pic(sl, ic, xx, cy, 48, white=first)
+                text(sl, xx + 66, cy, 600, 48, p[key], size=32, color=c1, anchor="m", min_size=20)
+                xx += 760
     return sl
 
 
@@ -1090,14 +1505,16 @@ def build(deck, base, out):
     T = DIRECTIONS[CTX["direction"]]
     prs = Presentation()
     prs.slide_width, prs.slide_height = E(W), E(H)
-    for i, s in enumerate(deck["slides"], 1):
+    slides = list(deck["slides"])
+    if deck.get("repeat_title", False) and slides and slides[0].get("layout") == "title":
+        slides.append(dict(slides[0], notes=""))  # финальный слайд — повтор титула, как в презентациях ВТБ Образования
+    for i, s in enumerate(slides, 1):
         lay = s.get("layout", "bullets")
         if lay not in LAYOUTS:
             sys.exit(f"Слайд {i}: неизвестный макет «{lay}». Доступны: {', '.join(sorted(LAYOUTS))}")
         sl = LAYOUTS[lay](prs, s, i, f"Слайд {i} ({lay})")
-        if s.get("footnote"):
-            y = 1040 if s.get("source") else 1010
-            text(sl, 60, y, 1640, 34, s["footnote"], size=16, color=GREY, min_size=16, where=f"Слайд {i} сноска")
+        if lay not in ("title", "section"):
+            footnote(sl, s, f"Слайд {i}")
         if s.get("notes"):
             sl.notes_slide.notes_text_frame.text = s["notes"]
     prs.core_properties.title = deck.get("title", "")
@@ -1135,6 +1552,10 @@ def preview(pptx, out):
         f.rename(out / f"slide_{int(f.stem.split('-')[1]):02d}.png")
 
 
+def prs_slides(path):
+    return Presentation(str(path)).slides
+
+
 def main():
     global FONT, FONT_LIGHT
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -1156,7 +1577,7 @@ def main():
     for r in REPORT:
         print("•", r)
     bad = [r for r in REPORT if "ПЕРЕПОЛНЕНИЕ" in r]
-    print(f"\nГотово: {p}  (слайдов: {len(deck['slides'])}, замечаний: {len(REPORT)}, переполнений: {len(bad)})")
+    print(f"\nГотово: {p}  (слайдов: {len(prs_slides(p))}, замечаний: {len(REPORT)}, переполнений: {len(bad)})")
     if bad:
         sys.exit(2)
 

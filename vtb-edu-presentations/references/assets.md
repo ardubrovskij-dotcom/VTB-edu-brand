@@ -10,7 +10,9 @@
 
 Подбор по смыслу: обучение — `graduation`, `presentation`, `bulb`, `search`, `timer`; финансы — `bank`, `calculator`, `money`, `coins`, `card`, `briefcase`, `document`; ИТ — `monitor`, `server`, `cloud`, `link`, `globe`; люди — `people`, `people-list`, `user-add`, `user-growth`, `user-target`, `user-chat`, `handshake`; управление — `structure`, `list`, `layers`, `folder`, `edit`, `signature`; знаки — `check`, `bell`, `pin`, `home`, `copy`, `download`, `star`, `gear`; связь — `mail`, `send`, `phone`, `chat`.
 
-## Портреты для титула — `"portrait": "<направление>"`
+## Портреты для титула — `"portrait": "<имя>"`
+
+`vtb-2` — портрет с эталонной презентации «ШОиФД 2.0», используется по умолчанию на диагональном титуле.
 
 Вырезанные портреты на прозрачном фоне, по одному на направление (`references/portraits.jpg`): `b2b`, `china`, `family`, `infra`, `private`, `privilege`, `prof`, `vtb`.
 
@@ -32,6 +34,8 @@
 ## Фоны-паттерны — `"background": "<направление>"`
 
 По умолчанию берётся фон направления презентации (`references/backgrounds.jpg`): `b2b`, `china`, `family`, `infra`, `private`, `privilege`, `prof`, `vtb`.
+
+`panel-vtb` — градиентная панель с дугами для диагонального титула и раздела (подставляется автоматически).
 
 ## Логотипы — `assets/logo/`
 
