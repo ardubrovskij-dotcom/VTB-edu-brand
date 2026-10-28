@@ -8,7 +8,7 @@
 | `assets/people/` | 9 портретов для обложек, у каждого имя (таблица ниже, `people.jpg`) | `"portrait": "artyom"` |
 | `assets/photos/` | фото сцен: `lecture`, `presenter`, `speaker`, `laptop`, `team` (вертикальное), `students` (вертикальное), `group`, `audience-cutout` (PNG без фона) | `"photo": "lecture"` |
 | `assets/logo/` | логотип: `logo-color`, `logo-white`, `logo-black`, `logo-onblue` | — |
-| `assets/fonts/` | Open Sans (OFL) — только для оценки переносов, если VTB Group не установлен | — |
+| `assets/fonts/` | Open Sans (OFL) — только для оценки переносов, если VTB Omega UI не установлен | — |
 | `references/icons.png` | 43 иконки (вариант «Заливка» — суффикс `-fill`) | `"icon": "bank"` |
 | `references/illustrations.png` | 114 иллюстраций | `"icon": "ill-finance-05"` |
 
@@ -51,12 +51,23 @@
 1. Скачать новый PPTX и запустить
    `python3 tools/prepare_template.py "<шаблон>.pptx" -o assets/template.pptx`.
    Скрипт оставит слайды 9–49, 52, 63–75 (по номерам исходного шаблона), удалит лишние макеты, пережмёт картинки
-   (58 → 14 МБ) и уберёт встроенный шрифт VTB Group (`--keep-fonts` — оставить).
+   (58 → 14 МБ) и уберёт встроенный старый шрифт VTB Group (`--keep-fonts` — оставить). На шрифт VTB Omega UI
+   и обычный регистр скрипт сборки переводит шаблон сам (`restyle()` в `build_deck.py`).
 2. Если номера или состав слайдов-образцов изменились — поправить `proto` и номера плейсхолдеров в
    `scripts/layouts.py`, имена иконок — в `ICON_ROWS` в `scripts/build_deck.py`.
 3. Фоны, карточки и портреты — заменить файлы в `assets/` с теми же именами.
 4. Собрать `examples/example.json` с `--preview` и проверить картинки.
 
+## Старые презентации на VTB Group
+Файл, собранный раньше или доработанный вручную, переводится на новый шрифт без пересборки — правки сохраняются:
+```
+python3 tools/restyle_pptx.py "старая.pptx" -o "новая.pptx"
+```
+Меняет шрифты темы во всех темах, VTB Group → VTB Omega UI (Bold/Medium → Medium), снимает «все прописные» и
+переводит набранный капсом текст в обычный регистр (аббревиатуры и имена собственные — списки в скрипте).
+Раскладку скрипт не пересчитывает: VTB Omega UI шире, поэтому длинные строки могут переноситься и наезжать. Если
+колода собрана скиллом и есть её deck.json — лучше пересобрать.
+
 ## Почему шрифт не встроен
-Репозиторий публичный, а VTB Group — корпоративный шрифт. В PPTX прописаны `VTB Group Book` / `VTB Group Light`:
+Репозиторий публичный, а VTB Omega UI — корпоративный шрифт. В PPTX прописаны `VTB Omega UI` и `VTB Omega UI Medium`:
 на компьютерах ВТБ со шрифтом презентация выглядит как шаблон, без шрифта PowerPoint подставит замену.
