@@ -187,6 +187,7 @@ def header(slide, s, ctx, where, top=TITLE_TOP, width=735, size=TITLE_SIZE, max_
             tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
             tf.word_wrap = True
             tf.vertical_anchor = MSO_ANCHOR.TOP
+            no_autoshrink(tf)
             tf.text = B().nbsp(title)
             for p in tf.paragraphs:
                 p.line_spacing = Pt(pitch)
@@ -208,6 +209,21 @@ def header(slide, s, ctx, where, top=TITLE_TOP, width=735, size=TITLE_SIZE, max_
     if s.get('footnote'):
         text(slide, X0, 495, 700, 14, s['footnote'], 9.5, MUTED, name='Сноска')
     return y
+
+
+def no_autoshrink(tf):
+    """Запрещает PowerPoint ужимать заголовок (normAutofit fontScale): кегль подбирает скрипт, и он един по колоде.
+    Иначе после правки текста в PowerPoint заголовок одного слайда становится мельче остальных."""
+    bp = tf._txBody.find('{%s}bodyPr' % A)
+    for tag in ('normAutofit', 'spAutoFit', 'noAutofit'):
+        for el in bp.findall('{%s}%s' % (A, tag)):
+            bp.remove(el)
+    ext = bp.find('{%s}scene3d' % A)
+    na = parse_xml(f'<a:noAutofit xmlns:a="{A}"/>')
+    if ext is not None:
+        ext.addprevious(na)
+    else:
+        bp.insert(0, na)
 
 
 def content_top(slide, s, ctx, where, need, head_bottom):
