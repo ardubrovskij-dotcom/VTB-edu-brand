@@ -355,7 +355,7 @@ def h_stats(slide, s, ctx, where):
 def accent_tile(slide, ctx, where, it, x, y, w, h, pad, k):
     """Акцентная плитка с текстом: заголовок сверху, пункты прижаты к низу («Цели проекта»)."""
     rect(slide, x, y, w, h, grad=GRAD[ctx['dir_no']])
-    ty = y + 16
+    ty = y + 18  # вровень с цифрами соседних плиток
     if it.get('title'):
         tn = lines(ctx, it['title'], 15, w - 2 * pad, bold=True)
         text(slide, x + pad, ty, w - 2 * pad, tn * 18, it['title'], 15, 'FFFFFF', bold=True, pitch=18)
@@ -445,7 +445,10 @@ def h_features(slide, s, ctx, where):
     hl = B().asset('cards', f'highlight_{n:02d}')
     picture_fill(slide, ctx, hl, X0, top, lw, h, radius=6, focus=(0.5, 0.5))
     if s.get('card_title'):
-        text(slide, X0 + 20, top + 20, lw - 40, 120, s['card_title'], 16, 'FFFFFF', bold=True, pitch=19)
+        cs, ok = fit_size(ctx, s['card_title'], 16, lw - 30, 140, 19 / 16, role='заголовок плитки')
+        if not ok:
+            warn(ctx, where, 'ПЕРЕПОЛНЕНИЕ — заголовок плитки не помещается, сократите')
+        text(slide, X0 + 20, top + 20, lw - 30, 140, s['card_title'], cs, 'FFFFFF', bold=True, pitch=cs * 19 / 16)
     if s.get('card_icon'):
         icon(slide, ctx, s['card_icon'], X0 + 20, top + h - 76, 56, where, white=True, alpha=0.5)
     cols, rows = 3, 2
@@ -510,7 +513,7 @@ def h_rows(slide, s, ctx, where):
                     for ext in blip.findall('{%s}extLst' % A):
                         blip.remove(ext)
                     blip.append(parse_xml(f'<a:alphaModFix xmlns:a="{A}" amt="30000"/>'))
-        text(slide, X0 + 16, y + 14, lw - 110, h - 28, it.get('title', ''), 14,
+        text(slide, X0 + 16, y + pad, lw - 110, h - 2 * pad, it.get('title', ''), 14,
              ACCENT[ctx['dir_no']] if muted else 'FFFFFF', pitch=17)
         pts = it.get('points') or []
         ncol = it.get('columns') or (2 if len(pts) > 3 else 1)
@@ -616,6 +619,40 @@ def _img_path(pic):
     return path
 
 
+def portrait_frame(path, sw=960, sh=540):
+    """Рамка портрета-вырезки на обложке. Портрет прижат к правому и верхнему краю слайда и не кадрируется.
+    Если фигура в исходнике срезана по левому краю (плечо), портрет увеличивается, пока срез не уйдёт ниже
+    слайда: иначе посреди слайда видна вертикальная линия обреза (правка автора: «не обрезать плечо»)."""
+    from PIL import Image
+    im = Image.open(path)
+    W, H = im.size
+    h = sh
+    if im.mode in ('RGBA', 'LA', 'P'):
+        a = im.convert('RGBA').getchannel('A')
+        cut = next((y for y in range(H) if a.getpixel((0, y)) > 128), None)  # где фигура касается левого края
+        if cut:
+            h = max(h, sh * H / cut)
+    w = h * W / H
+    return sw - w, 0, w, h
+
+
+def opaque_left(path, frame, y0, y1):
+    """Самая левая непрозрачная точка портрета в полосе y0–y1 слайда (pt)."""
+    from PIL import Image
+    im = Image.open(path)
+    if im.mode not in ('RGBA', 'LA', 'P'):
+        return frame[0]
+    a = im.convert('RGBA').getchannel('A')
+    W, H = a.size
+    x, y, w, h = frame
+    top = int(max(0, (y0 - y) / h * H))
+    bottom = int(min(H, (y1 - y) / h * H))
+    if bottom <= top:
+        return 960
+    bb = a.crop((0, top, W, bottom)).point(lambda v: 255 if v > 128 else 0).getbbox()
+    return x + bb[0] / W * w if bb else 960
+
+
 def mix(a, b, t):
     ca = [int(a[i:i + 2], 16) for i in (0, 2, 4)]
     cb = [int(b[i:i + 2], 16) for i in (0, 2, 4)]
@@ -675,11 +712,11 @@ def h_team(slide, s, ctx, where):
     clear_slide(slide)
     s2 = dict(s)
     s2.setdefault('title', 'Контакты')
-    header(slide, s2, ctx, where, size=40, max_lines=1)
+    header(slide, s2, ctx, where, max_lines=1)  # кегль — как у всех заголовков
     its = items_of(s)[:3]
     n = len(its)
     top0 = 108
-    h = (BOTTOM + 12 - top0 - GAP * (n - 1)) / max(1, n)
+    h = (BOTTOM - top0 - GAP * (n - 1)) / max(1, n)
     card = B().asset('cards', f'card_{ctx["dir_no"]:02d}')
     light = ctx['dir_no'] in (5, 6)
     for k, it in enumerate(its):
@@ -714,15 +751,23 @@ def h_title(slide, s, ctx, where):
     title = s.get('title', '')
     chapter = s.get('layout') == 'chapter'
     t = next((p for p in slide.placeholders if p.placeholder_format.type in (1, 3)), None)
-    # портрет — справа во всю высоту и под текстом
+    # портрет — справа и под текстом, без кадрирования: срезанные края исходника уходят за край слайда
+    figure_left = 960
     for pic in [x for x in slide.shapes if x.name.startswith('Image')]:
-        pic.left, pic.top, pic.width, pic.height = (Emu(int(v * E)) for v in (480, 0, 480, 540))
-        B().put_image(slide, pic, _img_path(pic), focus=(0.5, 0.0))
+        path = _img_path(pic)
+        x, y, w, h = portrait_frame(path)
+        # фигура не должна подходить к названию ближе 16 pt: иначе сдвигаем портрет вправо, за край слайда
+        # (срез правым краем слайда — допустимый вылет, как в эталоне)
+        x += max(0, 35 + 445 + 16 - opaque_left(path, (x, y, w, h), 180, 360))
+        figure_left = min(figure_left, opaque_left(path, (x, y, w, h), 180, 360))
+        pic.left, pic.top, pic.width, pic.height = (Emu(int(v * E)) for v in (x, y, w, h))
+        B().put_image(slide, pic, path, focus=(0.5, 0.0))
         tree = slide.shapes._spTree
         tree.remove(pic._element)
         tree.insert(2, pic._element)
     size0 = 48 if chapter else 28
-    tw = 428 if chapter else 445  # правее начинается портрет: текст не должен на него заходить
+    # название не доходит до фигуры на портрете: зазор не меньше 16 pt
+    tw = 428 if chapter else min(445, figure_left - 16 - 35)
     sz, ok = fit_size(ctx, title, size0, tw, (2 if chapter else 3) * size0 * 1.07, 1.07, floor=20, caps=False)
     if not ok:
         warn(ctx, where, 'ПЕРЕПОЛНЕНИЕ — название не помещается')

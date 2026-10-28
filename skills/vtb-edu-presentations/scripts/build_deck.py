@@ -4,7 +4,8 @@
 Каждый слайд — копия слайда-прототипа из assets/template.pptx, привязанная к мастеру нужного направления.
 Скрипт заполняет плейсхолдеры, меняет иконки, фото, портреты, таблицы и диаграммы, убирает лишние элементы.
 
-    python3 build_deck.py deck.json -o out/ [--preview]
+    python3 build_deck.py deck.json -o out/ --wireframe   # 1) прототип: серые блоки для согласования
+    python3 build_deck.py deck.json -o out/ --preview     # 2) дизайн после согласования + ревью
     python3 build_deck.py --list-icons
 """
 import argparse, copy, io, json, os, re, shutil, subprocess, sys
@@ -22,6 +23,11 @@ from pptx.util import Pt, Emu
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from layouts import LAYOUTS, DIRECTIONS, PEOPLE  # noqa: E402
 import house  # noqa: E402
+
+if __name__ == '__main__':
+    # house.py обращается к build_deck через import: без этого он получит второй экземпляр модуля со своим
+    # UNIFORM, и единый кегль для макетов фирменного стиля не сработает
+    sys.modules.setdefault('build_deck', sys.modules[__name__])
 
 SKILL = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ASSETS = os.path.join(SKILL, 'assets')
@@ -414,9 +420,14 @@ def set_text(sh, value, slide, fitter, report, where, max_lines=None):
     fit(sh, slide, fitter, report, where, max_lines)
 
 
+# слова, которые не оставляют в конце строки: предлоги, союзы, частицы, числа (перед единицей)
+HANGING = r'[а-яА-ЯёЁa-zA-Z]{1,2}|\d+|(?:[Дд]ля|[Пп]ри|[Бб]ез|[Пп]ро|[Нн]ад|[Пп]од|[Оо]бо|[Ии]ли|[Чч]то|[Кк]ак|[Нн]е|[Нн]о)'
+
+
 def nbsp(s):
-    s = re.sub(r'(?<=\s)([а-яА-ЯёЁa-zA-Z]{1,2}|\d+)\s', lambda m: m.group(1) + ' ', s)
-    s = re.sub(r'\s—', ' —', s)
+    """Неразрывный пробел после предлогов, союзов и чисел и перед тире — без висячих слов в конце строки."""
+    s = re.sub(r'(?<![\w\-])(' + HANGING + r') (?=\S)', lambda m: m.group(1) + ' ', s)
+    s = re.sub(r' —', ' —', s)
     return s
 
 
@@ -1103,7 +1114,7 @@ def build_once(deck, template):
     return prs, ctx['report']
 
 
-def preview(pptx, out_dir):
+def preview(pptx, out_dir, prefix='slide', labels=None):
     if not shutil.which('soffice'):
         print('LibreOffice не найден — превью пропущено')
         return
@@ -1111,8 +1122,40 @@ def preview(pptx, out_dir):
                    capture_output=True, timeout=600)
     pdf = os.path.splitext(pptx)[0] + '.pdf'
     if shutil.which('pdftoppm') and os.path.exists(pdf):
-        subprocess.run(['pdftoppm', '-r', '80', '-png', pdf, os.path.join(out_dir, 'slide')])
-        print('превью:', pdf, 'и slide-*.png')
+        for old in os.listdir(out_dir):
+            if re.fullmatch(prefix + r'-\d+\.png', old):
+                os.remove(os.path.join(out_dir, old))
+        subprocess.run(['pdftoppm', '-r', '80', '-png', pdf, os.path.join(out_dir, prefix)])
+        sheet = contact_sheet(out_dir, prefix, labels)
+        print('превью:', pdf, f'и {prefix}-*.png; все слайды на одном листе — {sheet}')
+
+
+def contact_sheet(out_dir, prefix, labels=None, cols=4):
+    """Все слайды на одном листе с подписями «N · макет» — для согласования и визуального ревью."""
+    from PIL import ImageDraw
+    files = sorted(f for f in os.listdir(out_dir) if re.fullmatch(prefix + r'-\d+\.png', f))
+    if not files:
+        return None
+    ims = [Image.open(os.path.join(out_dir, f)).convert('RGB') for f in files]
+    tw = 480
+    th = int(ims[0].height * tw / ims[0].width)
+    g, lab = 12, 24
+    rows = (len(ims) + cols - 1) // cols
+    sheet = Image.new('RGB', (cols * tw + (cols + 1) * g, rows * (th + lab) + (rows + 1) * g), 'white')
+    d = ImageDraw.Draw(sheet)
+    try:
+        font = ImageFont.truetype(Fitter().font_path, 16)
+    except OSError:
+        font = None
+    for i, im in enumerate(ims):
+        x, y = g + (i % cols) * (tw + g), g + (i // cols) * (th + lab + g)
+        name = labels[i] if labels and i < len(labels) else ''
+        d.text((x, y + 2), f'{i + 1} · {name}', fill=(10, 40, 150), font=font)
+        sheet.paste(im.resize((tw, th), Image.LANCZOS), (x, y + lab))
+        d.rectangle([x, y + lab, x + tw - 1, y + lab + th - 1], outline=(210, 214, 222))
+    path = os.path.join(out_dir, prefix + '-sheet.png')
+    sheet.save(path)
+    return path
 
 
 def list_people():
@@ -1136,6 +1179,9 @@ def main():
     ap.add_argument('-o', '--out', default='out')
     ap.add_argument('--template', default=os.path.join(ASSETS, 'template.pptx'))
     ap.add_argument('--preview', action='store_true')
+    ap.add_argument('--wireframe', action='store_true',
+                    help='прототип: раскладка блоков в сером для согласования (дизайн — после «да»)')
+    ap.add_argument('--no-review', action='store_true', help='не запускать ревьюер после сборки')
     ap.add_argument('--list-icons', action='store_true')
     ap.add_argument('--list-people', action='store_true')
     a = ap.parse_args()
@@ -1154,14 +1200,36 @@ def main():
     template = os.path.join(cwd, a.template) if not os.path.isabs(a.template) else a.template
     fn, report = build(deck, out_dir, template)
     os.chdir(cwd)
+    labels = [s.get('layout', '') for s in deck['slides']]
+    if a.wireframe:
+        import wireframe
+        proto = os.path.splitext(fn)[0] + '-прототип.pptx'
+        wireframe.convert(Presentation(fn), deck).save(proto)
+        os.remove(fn)  # дизайн собирается только после согласования прототипа
+        print('прототип:', proto)
+        for r in report:
+            print(' -', r)
+        preview(proto, out_dir, 'proto', labels)
+        return 2 if any('ПЕРЕПОЛНЕНИЕ' in r for r in report) else 0
     print('готово:', fn)
     with open(os.path.join(out_dir, 'report.json'), 'w', encoding='utf-8') as f:
         json.dump(report, f, ensure_ascii=False, indent=1)
     for r in report:
         print(' -', r)
+    errors = 0
+    if not a.no_review:  # ревьюер: обязательная проверка перед отдачей
+        import review
+        prs = Presentation(fn)
+        fixed = review.fix_hanging(prs)
+        if sum(fixed.values()):
+            prs.save(fn)
+        rv = review.Review(Presentation(fn)).run()
+        print('ревью (scripts/review.py):')
+        print(rv.report(+fixed, True))
+        errors = sum(1 for i in rv.items if i['level'] == 'ОШИБКА')
     if a.preview:
-        preview(fn, out_dir)
-    return 2 if any('ПЕРЕПОЛНЕНИЕ' in r for r in report) else 0
+        preview(fn, out_dir, 'slide', labels)
+    return 2 if any('ПЕРЕПОЛНЕНИЕ' in r for r in report) or errors else 0
 
 
 if __name__ == '__main__':
