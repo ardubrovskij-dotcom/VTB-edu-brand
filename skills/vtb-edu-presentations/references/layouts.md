@@ -37,22 +37,23 @@
 
 ## Фирменный стиль (по умолчанию)
 
-Вид и правила — `house-style.md`, превью — `house-1.jpg`, `house-2.jpg`, пример — `examples/shoifd.json`.
+Вид и правила — `house-style.md`, эталон — `etalon-shoifd.pptx` (превью `etalon-shoifd.jpg`), превью макетов —
+`house-1.jpg`, `house-2.jpg`, пример — `examples/shoifd.json` (собирается в копию эталона).
 Общие поля: `title` (вывод, до 3 строк), `subtitle` (серым под заголовком), `title2` (вторая строка, 16 pt),
 `footnote` (сноска внизу), `notes`. Текст `**так**` — полужирным.
 
 | layout | Поля | items |
 |---|---|---|
 | `title` | `title`, `note` (синим), `date`, `portrait` | — |
-| `chapter` | `kicker` (серый надзаголовок), `title`, `note`, `date`, `date_muted: true` (дата серым) | — |
-| `cards` | `height` (необяз., по умолчанию 164 pt) | 2–4 × `title`, `text`, `icon` (необяз.), `accent: true` |
-| `stats` | `columns` (необяз.), `height` | до 9 × `value` («17 стран», «80 из 89»), `text`; плитка с текстом: `accent: true`, `title`, `points` |
-| `speakers` | `stat`: `{value, text}` — общая цифра над карточками | до 9 × `name`, `role`, `photo` (путь к фото) |
+| `chapter` | `title` («Приложение»), `note`, `date` — как на обложке; `kicker` (необяз., серый надзаголовок) | — |
+| `cards` | `height` (необяз., по умолчанию 175 pt) | 2–4 × `title`, `text`, `icon` (необяз.), `accent: true` |
+| `stats` | `columns` (необяз.), `height` | до 9 × `value` («17 стран», «80 из 89», «4,7/5» — слова и «/5» мелко), `text`; плитка с текстом: `accent: true`, `title`, `points`. Первая акцентная плитка при 2 рядах — во всю высоту слева (эталон: «Цели проекта» + 3 × 2 цифры, `columns: 4`) |
+| `speakers` | `stat`: `{value, text}` — общая цифра над карточками («9,3/10») | до 9 × `name` (14 pt), `role` (11 pt), `photo` (путь; кадр 79 × 89, лицо сверху) |
 | `features` | `card_title`, `card_icon` | 6 × `icon`, `text` |
-| `rows` | — | 2–4 × `title`, `icon` (водяной знак), `points` (список), `columns` (1 или 2), `muted: true` — серая метка |
+| `rows` | — | 2–4 × `title`, `icon` (водяной знак), `points` (список), `columns` (1 или 2), `muted: true` — серая метка с синим текстом, `group` — подпись группы над строкой («Базовый формат», «Дополнительно») |
 | `datatable` | `table`: `columns`, `rows`, `highlight` (номера выделенных строк, по умолчанию `[0]`), `widths` (доли); `align: "top"` — таблица сразу под заголовком | — |
-| `course` | `title` (название курса), `lead` (описание), `modules` («**Тема.** пояснение»), `modules_title` (необяз.) | — |
-| `team` | `title` (по умолчанию «Контакты») | до 3 × `name`, `role`, `email`, `phone`, `photo` |
+| `course` | `title` (название курса), `lead` (описание, 12 pt во всю ширину), `duration` («24 ак. ч»), `modules` («**Тема.** пояснение» — нумеруются сами), `features` (пункты карточки «Особенности», `**выделение**`), `modules_title`, `features_title` (необяз.) | — |
+| `team` | `title` (по умолчанию «Контакты») | до 3 × `name`, `role`, `email`, `phone`, `photo` (необяз.) |
 
 # Макеты мастер-шаблона
 
