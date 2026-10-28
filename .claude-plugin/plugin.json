@@ -1,8 +1,15 @@
 {
   "name": "vtb-edu-brand",
-  "version": "1.0.0",
-  "description": "Фирменный стиль «ВТБ Образование»: редактируемые презентации PPTX из мастер-шаблона «мерико × ВТБ Образование» (8 направлений, 38 макетов, портреты, фоны, иконки).",
-  "author": { "name": "ardubrovskij-dotcom" },
+  "version": "1.1.0",
+  "description": "Фирменный стиль «ВТБ Образование»: редактируемые презентации PPTX из мастер-шаблона «мерико × ВТБ Образование» (8 направлений, макеты, портреты, иконки), прототип для согласования и ревьюер слайдов.",
+  "author": {
+    "name": "ardubrovskij-dotcom"
+  },
   "repository": "https://github.com/ardubrovskij-dotcom/VTB-edu-brand",
-  "keywords": ["vtb", "presentations", "pptx", "brand"]
+  "keywords": [
+    "vtb",
+    "presentations",
+    "pptx",
+    "brand"
+  ]
 }

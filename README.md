@@ -69,8 +69,12 @@
 ### Что будет дальше
 1. Если чего-то не хватает, Claude задаст вопросы одним сообщением.
 2. Для колоды больше 8 слайдов Claude сначала покажет план «слайд — мысль» на согласование.
-3. Claude соберёт PPTX и, если среда позволяет, PDF и картинки слайдов для проверки.
-4. Вы скачиваете PPTX и правите его в PowerPoint как обычную презентацию. Попросить правку можно и в чате:
+3. **Прототип.** Claude покажет все слайды в сером: настоящий текст, расстановка блоков, заглушки фото и иконок.
+   Скажите, что поменять, — или «да», и только тогда начнётся дизайн.
+   [Пример прототипа](skills/vtb-edu-presentations/references/prototype.jpg).
+4. **Дизайн и ревью.** Claude соберёт PPTX и проверит его ревьюером: поля, наложения и вылеты текста, фото
+   (не срезаны ли плечи и лица), иконки, единый кегль, висячие предлоги. С ошибками ревьюера файл не отдаётся.
+5. Вы скачиваете PPTX и правите его в PowerPoint как обычную презентацию. Попросить правку можно и в чате:
    «замени фото на третьем слайде», «сократи текст карточек».
 
 ## 3. Направления
@@ -111,7 +115,12 @@
 заголовок-вывод обычным регистром (без капса), контент прижат к низу, серые карточки, крупные цифры, диагональная обложка
 ([правила](skills/vtb-edu-presentations/references/house-style.md)).
 
-![Фирменный стиль: эталон ШОиФД 2.0](skills/vtb-edu-presentations/references/house-1.jpg)
+![Эталон: финальная версия ШОиФД 2.0 (обезличена)](skills/vtb-edu-presentations/references/etalon-shoifd.jpg)
+
+Эталон лежит в скилле в PPTX — [`references/etalon-shoifd.pptx`](skills/vtb-edu-presentations/references/etalon-shoifd.pptx)
+(имена, почты, цифры и фото спикеров заменены заглушками). Как скилл собирает те же слайды:
+
+![Фирменный стиль: макеты скилла](skills/vtb-edu-presentations/references/house-1.jpg)
 
 Макет Claude подбирает сам по содержанию. Можно попросить конкретный: «сделай цифры плитками», «таблицу с выводом»,
 «таймлайн».
@@ -190,7 +199,9 @@ Claude возьмёт ближайший макет и скажет об это�
 pip install python-pptx pillow lxml
 python3 skills/vtb-edu-presentations/scripts/build_deck.py skills/vtb-edu-presentations/examples/example.json -o out/ --preview
 ```
-`--preview` дополнительно делает PDF и PNG (нужны LibreOffice и poppler-utils).
+`--preview` дополнительно делает PDF и PNG (нужны LibreOffice и poppler-utils), `--wireframe` — прототип в сером.
+После сборки запускается ревьюер; отдельно — `scripts/review.py deck.pptx [--fix out.pptx]`,
+самопроверка ревьюера — `tools/test_review.py`.
 Списки ресурсов: `build_deck.py --list-people`, `build_deck.py --list-icons`.
 
 ### zip для claude.ai
@@ -203,12 +214,14 @@ cd skills && zip -r ../vtb-edu-presentations.zip vtb-edu-presentations -x '*/__p
 ### Структура
 ```
 .claude-plugin/          манифест плагина и маркетплейса, иконка
+agents/                  presentation-reviewer — визуальный ревьюер слайдов (Claude Code)
 skills/vtb-edu-presentations/
   SKILL.md               инструкция для Claude
-  scripts/               build_deck.py (сборка), layouts.py (макеты, направления, портреты)
-  tools/                 prepare_template.py (обновление шаблона)
+  scripts/               build_deck.py (сборка), house.py (фирменный стиль), layouts.py (макеты, направления,
+                         портреты), wireframe.py (прототип), review.py (ревьюер)
+  tools/                 prepare_template.py (обновление шаблона), restyle_pptx.py, test_review.py
   assets/                облегчённый шаблон, фоны, карточки, портреты, фото, логотип
-  references/            описание макетов, бренда, ресурсов; превью
+  references/            эталон PPTX, фирменный стиль, макеты, чек-лист ревью, бренд, ресурсы; превью
   examples/              пример колоды и превью
 ```
 
