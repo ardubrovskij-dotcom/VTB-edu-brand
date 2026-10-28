@@ -193,7 +193,7 @@ def header(slide, s, ctx, where, top=TITLE_TOP, width=735, size=TITLE_SIZE, max_
                 p.line_spacing = Pt(pitch)
                 for r in p.runs:
                     r.font.size = Pt(sz)
-                    r.font.color.rgb = RGBColor.from_string('000000')
+                    r.font.color.rgb = RGBColor.from_string(ACCENT[ctx['dir_no']])  # заголовки — цветом направления
         else:
             t._element.getparent().remove(t._element)
     if s.get('title2'):  # вторая строка заголовка капсом, мельче («Базовый формат:» + суть)
@@ -689,7 +689,7 @@ def h_title(slide, s, ctx, where):
             p.line_spacing = Pt(sz * 1.07)
             for r in p.runs:
                 r.font.size = Pt(sz)
-                r.font.color.rgb = RGBColor.from_string('000000')
+                r.font.color.rgb = RGBColor.from_string(ACCENT[ctx['dir_no']])
     for sh in list(slide.placeholders):  # нижние поля прототипа заменяем своими
         if sh.placeholder_format.type not in (1, 3, 13):
             sh._element.getparent().remove(sh._element)
