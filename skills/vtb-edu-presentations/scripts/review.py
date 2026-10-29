@@ -376,6 +376,17 @@ def group_distortion(sh):
     return abs((int(ext.get('cx')) / int(ext.get('cy'))) / (int(che.get('cx')) / int(che.get('cy'))) - 1)
 
 
+def group_scale(sh):
+    """Масштаб группы-иконки относительно исходника (ext / chExt). None — не группа."""
+    if stype(sh) != 6:
+        return None
+    xfrm = sh._element.find('{%s}grpSpPr/{%s}xfrm' % (P, A))
+    ext, che = xfrm.find('{%s}ext' % A), xfrm.find('{%s}chExt' % A)
+    if che is None or not int(che.get('cx')):
+        return None
+    return int(ext.get('cx')) / int(che.get('cx'))
+
+
 def stroke_ratio(sh, box):
     """Толщина самой толстой обводки внутри группы-иконки относительно её размера.
     Обводка в группе не масштабируется вместе с группой: у уменьшенной иконки линии сливаются."""
@@ -658,15 +669,22 @@ class Review:
         for key, g in groups.items():
             if len(g) < 2:
                 continue
-            sizes = [max(b[2], b[3]) for _, b, _ in g]
-            if max(sizes) - min(sizes) > 2:
-                self.add(no, 'ОШИБКА', 'иконка', 'иконки в одинаковых карточках разного размера: '
-                                                 + ', '.join(f'{s:.0f}' for s in sizes) + ' pt')
-            offs = [(round(b[0] - c[0]), round(b[1] - c[1])) for _, b, c in g]
+            scales = [group_scale(ic) for ic, _, _ in g]
+            if all(scales) and max(scales) / min(scales) > 1.08:
+                self.add(no, 'ОШИБКА', 'иконка', 'иконки в одинаковых карточках разного масштаба (визуально разного '
+                                                 'размера, разная толщина линий): '
+                                                 + ', '.join(f'×{s:.2f}' for s in scales))
+            elif not all(scales):
+                sizes = [max(b[2], b[3]) for _, b, _ in g]
+                if max(sizes) - min(sizes) > 2:
+                    self.add(no, 'ОШИБКА', 'иконка', 'иконки в одинаковых карточках разного размера: '
+                                                     + ', '.join(f'{s:.0f}' for s in sizes) + ' pt')
+            # иконки набора выравниваются по центру своей клетки: сравниваем центры, а не края рамок
+            offs = [(round(b[0] + b[2] / 2 - c[0]), round(b[1] + b[3] / 2 - c[1])) for _, b, c in g]
             common = collections.Counter(offs).most_common(1)[0][0]
             for (ic, b, c), off in zip(g, offs):
                 if abs(off[0] - common[0]) > 2 or abs(off[1] - common[1]) > 2:
-                    self.add(no, 'ОШИБКА', 'иконка', f'иконка «{ic.name}» сдвинута: отступ от края карточки {off}, '
+                    self.add(no, 'ОШИБКА', 'иконка', f'иконка «{ic.name}» сдвинута: центр от края карточки {off}, '
                                                      f'у соседних {common}')
             same = [c for c in cards if (round(c[1][2] / 4), round(c[1][3] / 4)) == key]
             with_icon = {id(c) for _, _, c in g}
@@ -701,14 +719,13 @@ class Review:
         for no, slide in enumerate(self.prs.slides, 1):
             for sh, box in walk(slide.shapes):
                 if sh.name.startswith('Водяной знак'):
-                    m = re.search(r'([\d.]+) pt', sh._element.xpath('.//p:cNvPr/@descr')[0] if
-                                  sh._element.xpath('.//p:cNvPr/@descr') else '')
-                    size = float(m.group(1)) if m else max(box[2], box[3])
-                    sizes[round(size)].append(no)
+                    descr = (sh._element.xpath('.//p:cNvPr/@descr') or [''])[0]
+                    m = re.search(r'масштаб ([\d.]+)', descr)
+                    sizes[round(float(m.group(1)), 2) if m else round(max(box[2], box[3]))].append(no)
         if len(sizes) > 1:
-            self.add(0, 'ОШИБКА', 'иконка', 'водяные знаки разного размера: ' + '; '.join(
-                f'{s} pt — слайды {", ".join(map(str, sorted(set(v))))}' for s, v in sorted(sizes.items()))
-                + ' — один размер на всю колоду')
+            self.add(0, 'ОШИБКА', 'иконка', 'водяные знаки разного масштаба (визуально разного размера): ' + '; '.join(
+                f'×{s} — слайды {", ".join(map(str, sorted(set(v))))}' for s, v in sorted(sizes.items()))
+                + ' — один масштаб на всю колоду')
 
     def deck_uniform(self, roles, titles):
         if titles:
