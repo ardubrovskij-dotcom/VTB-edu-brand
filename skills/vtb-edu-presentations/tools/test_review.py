@@ -76,6 +76,16 @@ def main():
             r.font.size = Pt(7)
     expect.append((7, 'кегль'))
 
+    # 10. водяной знак вылезает за строку на сноску; 11. обводка иконки не уменьшена вместе с иконкой
+    mark = [x for x in s[7].shapes if x.shape_type == 6 and 40 * E < x.width <= 100 * E][-1]
+    mark.top = Emu(mark.top + 40 * E)
+    expect.append((8, 'иконка'))
+    ic = [x for x in s[5].shapes if x.shape_type == 6 and x.width < 40 * E][2]
+    for ln in ic._element.iter('{http://schemas.openxmlformats.org/drawingml/2006/main}ln'):
+        ln.set('w', str(int(3.6 * E)))
+    if not list(ic._element.iter('{http://schemas.openxmlformats.org/drawingml/2006/main}ln')):
+        sp = ic._element.find('.//{http://schemas.openxmlformats.org/presentationml/2006/main}spPr')
+        sp.append(parse_xml('<a:ln xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" w="45720"/>'))
     broken = os.path.join(tmp, 'broken.pptx')
     prs.save(broken)
     rv = review.Review(Presentation(broken)).run()

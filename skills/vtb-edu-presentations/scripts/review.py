@@ -376,6 +376,15 @@ def group_distortion(sh):
     return abs((int(ext.get('cx')) / int(ext.get('cy'))) / (int(che.get('cx')) / int(che.get('cy'))) - 1)
 
 
+def stroke_ratio(sh, box):
+    """Толщина самой толстой обводки внутри группы-иконки относительно её размера.
+    Обводка в группе не масштабируется вместе с группой: у уменьшенной иконки линии сливаются."""
+    ws = [int(w) / E for w in xp(sh._element, './/a:ln/@w')]
+    if not ws:
+        return 0
+    return max(ws) / max(1, min(box[2], box[3]))
+
+
 def has_fill(sh):
     sp = sh._element.find('{%s}spPr' % P)
     return sp is not None and (sp.find('{%s}solidFill' % A) is not None or sp.find('{%s}gradFill' % A) is not None
@@ -426,7 +435,7 @@ class Review:
         cover = bool(COVER_LAYOUTS.search(slide.slide_layout.name or ''))
         self.house = 'Таблица' in (slide.slide_layout.name or '')
         shapes = list(walk(slide.shapes))
-        texts, icons, photos, cards = [], [], [], []
+        texts, icons, photos, cards, decor = [], [], [], [], []
         has_footnote = False
         marks = False
         for sh, box in shapes:
@@ -437,10 +446,18 @@ class Review:
                 self.add(no, 'ОШИБКА', 'поля', f'«{sh.name}» целиком за пределами слайда — удалить')
                 continue
             if st == 6:
+                if max(w, h) <= DECOR_MAX:
+                    thick = stroke_ratio(sh, box)
+                    if thick > 0.12:
+                        self.add(no, 'ОШИБКА', 'иконка', f'иконка «{sh.name}» с непропорционально толстой обводкой '
+                                                         f'({thick:.0%} размера) — линии слились, иконка кривая; '
+                                                         'обводку уменьшить вместе с иконкой')
                 if max(w, h) <= ICON_MAX:
                     icons.append((sh, box))
-                elif max(w, h) <= DECOR_MAX and group_distortion(sh) > 0.04:
-                    self.add(no, 'ОШИБКА', 'иконка', f'значок «{sh.name}» искажён: пропорции сбиты на {group_distortion(sh):.0%}')
+                elif max(w, h) <= DECOR_MAX:
+                    decor.append((sh, box))
+                    if group_distortion(sh) > 0.04:
+                        self.add(no, 'ОШИБКА', 'иконка', f'значок «{sh.name}» искажён: пропорции сбиты на {group_distortion(sh):.0%}')
                 continue
             if st == 13:  # картинка
                 if max(w, h) <= ICON_MAX:
@@ -487,6 +504,10 @@ class Review:
         self.overlaps(no, slide, texts, icons, photos)
         self.picture_checks(no, photos, cards)
         self.icon_checks(no, icons, cards)
+        for d, box in decor:  # водяные знаки и крупные значки — внутри своей карточки
+            card = min((c for c in cards if centre_in(box, c[1])), key=lambda c: c[1][2] * c[1][3], default=None)
+            if card is not None and not inside(box, card[1], 1):
+                self.add(no, 'ОШИБКА', 'иконка', f'значок «{d.name}» вылезает за карточку')
         self.alignment(no, [s for s in texts if not s[0].is_placeholder and s[0].text_frame.text.strip()], 'текстов')
         self.alignment(no, cards + photos, 'карточек и фото')
         for sh, box in cards + photos + [i for i in icons]:

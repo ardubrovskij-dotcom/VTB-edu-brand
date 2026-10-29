@@ -103,7 +103,7 @@ def bbox(el_shape):
     return (el_shape.left / E, el_shape.top / E, el_shape.width / E, el_shape.height / E)
 
 
-def clusters(shapes, pad=3):
+def clusters(shapes, pad=6):
     """Группирует фигуры, чьи рамки пересекаются: одна иконка может состоять из нескольких фигур."""
     items = [[s] for s in shapes]
     boxes = [bbox(s) for s in shapes]
@@ -519,6 +519,11 @@ def place_icon(slide, lib, name, target, prs):
         el = copy.deepcopy(sh._element)
         remap = relate_from(src_slide.part, slide.part, rids_in(el), prs.part.package)
         remap_rids(el, remap)
+        # толщина обводки в группе не масштабируется: без этого иконка 16 pt рисуется линиями от 40 pt
+        # и превращается в кляксу (structure, money, timer)
+        for ln in el.iter('{%s}ln' % NS['a']):
+            if ln.get('w'):
+                ln.set('w', str(max(3175, int(int(ln.get('w')) * k))))
         grp.append(el)
     renumber(slide)
     return True

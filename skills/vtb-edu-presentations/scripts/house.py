@@ -506,8 +506,9 @@ def h_rows(slide, s, ctx, where):
             rect(slide, X0, y, lw + 6, h, grad=grad)
         # правый край метки прямой: накрываем скругление серой полосой
         cover = rect(slide, X0 + lw, y, 6, h, fill=CARD, radius=0)
-        if it.get('icon'):
-            icon(slide, ctx, it['icon'], X0 + lw - 96, y + h - 80, 88, where, white=not muted, alpha=0.35)
+        if it.get('icon'):  # водяной знак внутри метки: в правом нижнем углу, не выходит за строку
+            ws = min(88, h - 12)
+            icon(slide, ctx, it['icon'], X0 + lw - ws - 8, y + h - ws - 6, ws, where, white=not muted, alpha=0.35)
             if muted:  # синяя иконка тоже полупрозрачная
                 for blip in slide.shapes[-1]._element.iter('{%s}blip' % A):
                     for ext in blip.findall('{%s}extLst' % A):
