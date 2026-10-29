@@ -261,10 +261,28 @@ def icon(slide, ctx, name, x, y, size, where, white=False, alpha=None):
                 blip.append(parse_xml(f'<a:alphaModFix xmlns:a="{A}" amt="{int(alpha * 100000)}"/>'))
 
 
-def watermark(slide, ctx, name, label, where, muted=False, opacity=0.45):
+def wrap_lines(ctx, text, size, width):
+    """Строки текста после переноса по словам — как в Fitter.lines."""
+    out = []
+    for para in text.split('\n'):
+        cur = ''
+        for w in para.split(' '):
+            t = (cur + ' ' + w).strip()
+            if ctx['fitter'].width(t, size) <= width or not cur:
+                cur = t
+            else:
+                out.append(cur)
+                cur = w
+        out.append(cur)
+    return out
+
+
+def watermark(slide, ctx, name, label, where, muted=False, opacity=0.45, keep_out=None):
     """Водяной знак метки (как в макете автора): крупная белая полупрозрачная иконка в правом нижнем углу,
     высотой со строку, уходит под обрез — обрезана краем метки. Рисуется картинкой, обрезанной по метке:
-    группу иконки в PowerPoint обрезать нельзя, и она вылезала бы на соседнюю строку и сноску."""
+    группу иконки в PowerPoint обрезать нельзя, и она вылезала бы на соседнюю строку и сноску.
+    keep_out — рамка текста метки (x0, y0, x1, y1): знак на текст не заходит — встаёт правее текста
+    (уменьшается), а если места справа нет — ниже текста."""
     import io
     from PIL import Image
     lx, ly, lw, lh = label
@@ -274,10 +292,24 @@ def watermark(slide, ctx, name, label, where, muted=False, opacity=0.45):
         ws = min(88, lh - 12)
         icon(slide, ctx, name, lx + lw - ws - 8, ly + lh - ws - 6, ws, where, white=True, alpha=0.35)
         return
-    w = size * im.width / im.height if im.height >= im.width else size
-    h = size if im.height >= im.width else size * im.height / im.width
+    ratio = im.width / im.height
+    w = size * ratio if ratio <= 1 else size
+    h = w / ratio
     x = lx + lw - w * 1.04          # правый край чуть внутри метки
     y = ly + lh * 0.28             # низ уходит под обрез
+    if keep_out:
+        kx1, ky1 = keep_out[2] + 10, keep_out[3] + 8
+        if x < kx1 and y < ky1:  # заходит на текст
+            room = lx + lw - kx1
+            if room >= 0.55 * w:  # правее текста, чуть меньше
+                w = min(w, room / 1.04)
+                h = w / ratio
+                x = lx + lw - w * 1.04
+            elif ly + lh - ky1 >= 0.35 * h:  # ниже текста, под обрез
+                y = ky1
+            else:
+                warn(ctx, where, f'водяной знак «{name}» не помещается рядом с названием строки — убран')
+                return
     a = im.getchannel('A').point(lambda v: int(v * opacity))
     white = Image.new('RGBA', im.size, (255, 255, 255, 0))
     white.putalpha(a)
@@ -541,9 +573,14 @@ def h_rows(slide, s, ctx, where):
             rect(slide, X0, y, lw + 6, h, grad=grad)
         # правый край метки прямой: накрываем скругление серой полосой
         cover = rect(slide, X0 + lw, y, 6, h, fill=CARD, radius=0)
+        tw = lw - 110
         if it.get('icon'):
-            watermark(slide, ctx, it['icon'], (X0, y, lw, h), where, muted)
-        text(slide, X0 + 16, y + pad, lw - 110, h - 2 * pad, it.get('title', ''), 14,
+            title = re.sub(r'\*\*', '', it.get('title', ''))
+            tl = ctx['fitter'].lines(title, 14, tw) if title else 0
+            right = max((ctx['fitter'].width(part, 14) for part in wrap_lines(ctx, title, 14, tw)), default=0)
+            watermark(slide, ctx, it['icon'], (X0, y, lw, h), where, muted,
+                      keep_out=(X0 + 16, y + pad, X0 + 16 + right, y + pad + tl * 17))
+        text(slide, X0 + 16, y + pad, tw, h - 2 * pad, it.get('title', ''), 14,
              ACCENT[ctx['dir_no']] if muted else 'FFFFFF', pitch=17)
         pts = it.get('points') or []
         ncol = it.get('columns') or (2 if len(pts) > 3 else 1)
