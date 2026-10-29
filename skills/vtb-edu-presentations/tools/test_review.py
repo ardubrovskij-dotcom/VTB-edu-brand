@@ -77,7 +77,7 @@ def main():
     expect.append((7, 'кегль'))
 
     # 10. водяной знак вылезает за строку на сноску; 11. обводка иконки не уменьшена вместе с иконкой
-    mark = [x for x in s[7].shapes if x.shape_type == 6 and 40 * E < x.width <= 100 * E][-1]
+    mark = [x for x in s[7].shapes if x.name.startswith('Водяной знак')][-1]
     mark.top = Emu(mark.top + 40 * E)
     expect.append((8, 'иконка'))
     ic = [x for x in s[5].shapes if x.shape_type == 6 and x.width < 40 * E][2]

@@ -459,6 +459,9 @@ class Review:
                     if group_distortion(sh) > 0.04:
                         self.add(no, 'ОШИБКА', 'иконка', f'значок «{sh.name}» искажён: пропорции сбиты на {group_distortion(sh):.0%}')
                 continue
+            if st == 13 and sh.name.startswith('Водяной знак'):  # обрезан по метке сборкой
+                decor.append((sh, box))
+                continue
             if st == 13:  # картинка
                 if max(w, h) <= ICON_MAX:
                     icons.append((sh, box))
@@ -505,7 +508,10 @@ class Review:
         self.picture_checks(no, photos, cards)
         self.icon_checks(no, icons, cards)
         for d, box in decor:  # водяные знаки и крупные значки — внутри своей карточки
-            card = min((c for c in cards if centre_in(box, c[1])), key=lambda c: c[1][2] * c[1][3], default=None)
+            # карточка, с которой значок пересекается больше всего (у метки строки — сама строка)
+            over = [(inter(box, c[1])[0] * inter(box, c[1])[1], -c[1][2] * c[1][3], c) for c in cards]
+            over = [o for o in over if o[0] > 0]
+            card = max(over, key=lambda o: o[:2])[2] if over else None
             if card is not None and not inside(box, card[1], 1):
                 self.add(no, 'ОШИБКА', 'иконка', f'значок «{d.name}» вылезает за карточку')
         self.alignment(no, [s for s in texts if not s[0].is_placeholder and s[0].text_frame.text.strip()], 'текстов')
