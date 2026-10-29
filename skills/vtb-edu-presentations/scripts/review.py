@@ -414,6 +414,7 @@ class Review:
         for no, slide in enumerate(self.prs.slides, 1):
             self.slide(no, slide, roles, titles)
         self.deck_uniform(roles, titles)
+        self.watermarks()
         return self
 
     # -- тема
@@ -693,6 +694,21 @@ class Review:
             for a, b in zip(vals, vals[1:]):
                 if 0.6 < b - a <= 3:
                     self.add(no, 'ВНИМАНИЕ', 'выравнивание', f'{edge} края {what} почти совпадают: {a:g} и {b:g} — выровнять')
+
+    def watermarks(self):
+        """Водяные знаки строк — одного размера по всей колоде."""
+        sizes = collections.defaultdict(list)
+        for no, slide in enumerate(self.prs.slides, 1):
+            for sh, box in walk(slide.shapes):
+                if sh.name.startswith('Водяной знак'):
+                    m = re.search(r'([\d.]+) pt', sh._element.xpath('.//p:cNvPr/@descr')[0] if
+                                  sh._element.xpath('.//p:cNvPr/@descr') else '')
+                    size = float(m.group(1)) if m else max(box[2], box[3])
+                    sizes[round(size)].append(no)
+        if len(sizes) > 1:
+            self.add(0, 'ОШИБКА', 'иконка', 'водяные знаки разного размера: ' + '; '.join(
+                f'{s} pt — слайды {", ".join(map(str, sorted(set(v))))}' for s, v in sorted(sizes.items()))
+                + ' — один размер на всю колоду')
 
     def deck_uniform(self, roles, titles):
         if titles:

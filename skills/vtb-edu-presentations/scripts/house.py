@@ -33,6 +33,7 @@ SUB_SIZE, SUB_PITCH = 19, 23  # подзаголовок крупнее (пра�
 CARD = 'F4F6FA'
 TEXT = '3A4250'
 MUTED = '6B7683'
+WATERMARK = 96                    # водяной знак метки строки, pt (по большей стороне)
 NOTE = '4A5361'                   # сноски, подпись «Продолжительность»
 VALUE_SIZE = 42                   # цифры в плитках и над спикерами
 SMALL_IN_VALUE = r'[А-Яа-яЁё]+|/\s*\d+'  # мелко внутри цифры: «из», «стран», «/5», «/10»
@@ -286,25 +287,30 @@ def watermark(slide, ctx, name, label, where, muted=False, opacity=0.45, keep_ou
     import io
     from PIL import Image
     lx, ly, lw, lh = label
-    size = max(80, min(140, lh * 1.05))
-    im = B().icon_png(ctx['lib'], name, px=int(size * 4))
+    # один размер на всю колоду (как кегль): уменьшился у одной строки — уменьшается у всех
+    size = B().capped('водяной знак', WATERMARK)
+    im = B().icon_png(ctx['lib'], name, px=int(WATERMARK * 4))
     if im is None:  # в иконке есть векторные фигуры — обычная иконка целиком внутри метки
         ws = min(88, lh - 12)
         icon(slide, ctx, name, lx + lw - ws - 8, ly + lh - ws - 6, ws, where, white=True, alpha=0.35)
+        slide.shapes[-1].name = f'Водяной знак {name}'
+        slide.shapes[-1]._element.xpath('./p:nvGrpSpPr/p:cNvPr')[0].set('descr', f'водяной знак {ws:.1f} pt')
         return
     ratio = im.width / im.height
     w = size * ratio if ratio <= 1 else size
     h = w / ratio
     x = lx + lw - w * 1.04          # правый край чуть внутри метки
-    y = ly + lh * 0.28             # низ уходит под обрез
+    y = ly + lh - h * 0.72          # у всех знаков под обрез уходит одна и та же доля — 28 %
     if keep_out:
         kx1, ky1 = keep_out[2] + 10, keep_out[3] + 8
         if x < kx1 and y < ky1:  # заходит на текст
             room = lx + lw - kx1
-            if room >= 0.55 * w:  # правее текста, чуть меньше
+            if room >= 0.55 * w:  # правее текста, чуть меньше — и так же на всех строках колоды
                 w = min(w, room / 1.04)
                 h = w / ratio
+                B().note_size('водяной знак', WATERMARK, max(w, h))
                 x = lx + lw - w * 1.04
+                y = ly + lh - h * 0.72
             elif ly + lh - ky1 >= 0.35 * h:  # ниже текста, под обрез
                 y = ky1
             else:
@@ -326,6 +332,7 @@ def watermark(slide, ctx, name, label, where, muted=False, opacity=0.45, keep_ou
     pic = slide.shapes.add_picture(buf, Emu(int(vx0 * E)), Emu(int(vy0 * E)), Emu(int((vx1 - vx0) * E)),
                                    Emu(int((vy1 - vy0) * E)))
     pic.name = f'Водяной знак {name}'
+    pic._element.nvPicPr.cNvPr.set('descr', f'водяной знак {max(w, h):.1f} pt')  # для ревьюера: полный размер
 
 
 def picture_fill(slide, ctx, path, x, y, w, h, radius=6, focus=(0.5, 0.4), ellipse=False):
