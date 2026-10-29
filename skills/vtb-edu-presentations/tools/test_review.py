@@ -86,6 +86,11 @@ def main():
     if not list(ic._element.iter('{http://schemas.openxmlformats.org/drawingml/2006/main}ln')):
         sp = ic._element.find('.//{http://schemas.openxmlformats.org/presentationml/2006/main}spPr')
         sp.append(parse_xml('<a:ln xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" w="45720"/>'))
+    # 12. водяной знак под названием строки
+    wm = [x for x in s[6].shapes if x.name.startswith('Водяной знак')][0]
+    title = [x for x in s[6].shapes if x.has_text_frame and x.text_frame.text.strip() == 'Онлайн-курсы'][0]
+    wm.left, wm.top = title.left, title.top
+    expect.append((7, 'наложение'))
     broken = os.path.join(tmp, 'broken.pptx')
     prs.save(broken)
     rv = review.Review(Presentation(broken)).run()

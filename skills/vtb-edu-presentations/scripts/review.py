@@ -335,7 +335,7 @@ def opaque_box(pic, box):
     return (x0, y0, max(0, x1 - x0), max(0, y1 - y0))
 
 
-def covers(pic, box, rect):
+def covers(pic, box, rect, level=128):
     """Есть ли под текстом непрозрачная часть картинки (у вырезки прозрачный фон тексту не мешает)."""
     im = image_of(pic)
     if im is None or im.mode not in ('RGBA', 'LA', 'P'):
@@ -353,7 +353,7 @@ def covers(pic, box, rect):
             u = cl + (sx - x) / w * (1 - cl - cr)
             v = ct + (sy - y) / h * (1 - ct - cb)
             n += 1
-            hits += a.getpixel((min(W - 1, int(u * W)), min(H - 1, int(v * H)))) > 128
+            hits += a.getpixel((min(W - 1, int(u * W)), min(H - 1, int(v * H)))) > level
     return hits > 0
 
 
@@ -414,6 +414,7 @@ class Review:
         for no, slide in enumerate(self.prs.slides, 1):
             self.slide(no, slide, roles, titles)
         self.deck_uniform(roles, titles)
+        self.watermarks()
         return self
 
     # -- тема
@@ -504,7 +505,7 @@ class Review:
             if re.search(r'ПРОВЕРИТЬ|ЗАГЛУШК', nt):
                 self.add(no, 'ВНИМАНИЕ', 'заглушка', f'в заметках: {nt[:120]}')
         self._texts = texts
-        self.overlaps(no, slide, texts, icons, photos)
+        self.overlaps(no, slide, texts, icons, photos, decor)
         self.picture_checks(no, photos, cards)
         self.icon_checks(no, icons, cards)
         for d, box in decor:  # водяные знаки и крупные значки — внутри своей карточки
@@ -585,7 +586,7 @@ class Review:
                         return 'по шаблону'
         return None
 
-    def overlaps(self, no, slide, texts, icons, photos):
+    def overlaps(self, no, slide, texts, icons, photos, decor=()):
         ext = [(sh, sh._rv_ext) for sh, _ in texts if hasattr(sh, '_rv_ext')]
         for i in range(len(ext)):
             for j in range(i + 1, len(ext)):
@@ -601,6 +602,11 @@ class Review:
                 w, h = inter(e, box)
                 if w > 1 and h > 1:
                     self.add(no, 'ОШИБКА', 'наложение', f'текст «{sh.text_frame.text[:25]}…» налезает на иконку')
+            for d, box in decor:  # водяной знак под текстом читается как наложение — так нельзя
+                w, h = inter(e, box)
+                if w > 1 and h > 1 and (stype(d) != 13 or covers(d, box, e, level=20)):
+                    self.add(no, 'ОШИБКА', 'наложение', f'текст «{sh.text_frame.text[:25]}…» заходит на водяной знак '
+                                                         f'«{d.name}» — сдвинуть или уменьшить знак')
             for ph, box in photos:
                 near = (e[0] - 8, e[1], e[2] + 16, e[3])  # зазор до фото не меньше 8 pt
                 w, h = inter(near, box)
@@ -688,6 +694,21 @@ class Review:
             for a, b in zip(vals, vals[1:]):
                 if 0.6 < b - a <= 3:
                     self.add(no, 'ВНИМАНИЕ', 'выравнивание', f'{edge} края {what} почти совпадают: {a:g} и {b:g} — выровнять')
+
+    def watermarks(self):
+        """Водяные знаки строк — одного размера по всей колоде."""
+        sizes = collections.defaultdict(list)
+        for no, slide in enumerate(self.prs.slides, 1):
+            for sh, box in walk(slide.shapes):
+                if sh.name.startswith('Водяной знак'):
+                    m = re.search(r'([\d.]+) pt', sh._element.xpath('.//p:cNvPr/@descr')[0] if
+                                  sh._element.xpath('.//p:cNvPr/@descr') else '')
+                    size = float(m.group(1)) if m else max(box[2], box[3])
+                    sizes[round(size)].append(no)
+        if len(sizes) > 1:
+            self.add(0, 'ОШИБКА', 'иконка', 'водяные знаки разного размера: ' + '; '.join(
+                f'{s} pt — слайды {", ".join(map(str, sorted(set(v))))}' for s, v in sorted(sizes.items()))
+                + ' — один размер на всю колоду')
 
     def deck_uniform(self, roles, titles):
         if titles:
