@@ -495,13 +495,19 @@ def swap_blob(slide, pic, path):
     blip.set('{%s}embed' % R_NS, rId)
 
 
+ICON_GRID = 48  # сетка набора иконок шаблона, pt: иконки нарисованы на ней, рамки 40–63 pt задуманы так
+
+
 def place_icon(slide, lib, name, target, prs):
     """Ставит иконку из библиотеки шаблона в рамку target (x, y, w, h в pt), сохраняя пропорции."""
     if name not in lib:
         return False
     src_slide, (shapes, (bx, by, bw, bh)) = lib[name]
     tx, ty, tw, th = target
-    k = min(tw / bw, th / bh)
+    # один масштаб для всего набора: рамка соответствует клетке сетки (ICON_GRID). Иконка не растягивается
+    # и не ужимается по своей рамке — иначе линии разной толщины и иконки визуально разного размера.
+    # Иконка шире сетки (handshake, user-target) немного выходит за рамку — так и задумано в наборе.
+    k = min(tw, th) / ICON_GRID
     nw, nh = bw * k, bh * k
     nx, ny = tx + (tw - nw) / 2, ty + (th - nh) / 2
     grp = etree.SubElement(slide.shapes._spTree, '{%s}grpSp' % NS['p'])

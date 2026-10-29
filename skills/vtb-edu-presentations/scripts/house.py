@@ -294,23 +294,31 @@ def watermark(slide, ctx, name, label, where, muted=False, opacity=0.45, keep_ou
         ws = min(88, lh - 12)
         icon(slide, ctx, name, lx + lw - ws - 8, ly + lh - ws - 6, ws, where, white=True, alpha=0.35)
         slide.shapes[-1].name = f'Водяной знак {name}'
-        slide.shapes[-1]._element.xpath('./p:nvGrpSpPr/p:cNvPr')[0].set('descr', f'водяной знак {ws:.1f} pt')
+        grp = slide.shapes[-1]._element
+        sc = int(grp.xpath('.//a:ext/@cx')[0]) / int(grp.xpath('.//a:chExt/@cx')[0])
+        grp.xpath('./p:nvGrpSpPr/p:cNvPr')[0].set('descr', f'водяной знак масштаб {sc:.3f}')
         return
-    ratio = im.width / im.height
-    w = size * ratio if ratio <= 1 else size
-    h = w / ratio
-    x = lx + lw - w * 1.04          # правый край чуть внутри метки
-    y = ly + lh - h * 0.72          # у всех знаков под обрез уходит одна и та же доля — 28 %
+    # один масштаб для всех иконок набора: иконки нарисованы на общей сетке (ICON_GRID), поэтому при равном
+    # масштабе у них одинаковая толщина линий и они выглядят одного размера (правка автора: «визуально
+    # разного размера» — когда каждую растягивали до рамки). Иконка стоит по центру своей клетки сетки.
+    _, (_, (bx, by, bw, bh)) = ctx['lib'][name]
+    grid = B().ICON_GRID
+    scale = size / grid
+    w, h = bw * scale, bh * scale
+    cell = grid * scale
+    gx = lx + lw - cell * 1.02          # клетка прижата к правому краю метки
+    gy = ly + lh - cell * 0.72          # у всех знаков под обрез уходит одна доля клетки — 28 %
+    x, y = gx + (cell - w) / 2, gy + (cell - h) / 2
     if keep_out:
         kx1, ky1 = keep_out[2] + 10, keep_out[3] + 8
         if x < kx1 and y < ky1:  # заходит на текст
             room = lx + lw - kx1
-            if room >= 0.55 * w:  # правее текста, чуть меньше — и так же на всех строках колоды
-                w = min(w, room / 1.04)
-                h = w / ratio
-                B().note_size('водяной знак', WATERMARK, max(w, h))
-                x = lx + lw - w * 1.04
-                y = ly + lh - h * 0.72
+            if room >= 0.55 * cell * 1.02:  # правее текста, меньше — и так же на всех строках колоды
+                scale = min(scale, room / (grid * 1.02))
+                B().note_size('водяной знак', WATERMARK, scale * grid)
+                w, h, cell = bw * scale, bh * scale, grid * scale
+                gx, gy = lx + lw - cell * 1.02, ly + lh - cell * 0.72
+                x, y = gx + (cell - w) / 2, gy + (cell - h) / 2
             elif ly + lh - ky1 >= 0.35 * h:  # ниже текста, под обрез
                 y = ky1
             else:
@@ -332,7 +340,7 @@ def watermark(slide, ctx, name, label, where, muted=False, opacity=0.45, keep_ou
     pic = slide.shapes.add_picture(buf, Emu(int(vx0 * E)), Emu(int(vy0 * E)), Emu(int((vx1 - vx0) * E)),
                                    Emu(int((vy1 - vy0) * E)))
     pic.name = f'Водяной знак {name}'
-    pic._element.nvPicPr.cNvPr.set('descr', f'водяной знак {max(w, h):.1f} pt')  # для ревьюера: полный размер
+    pic._element.nvPicPr.cNvPr.set('descr', f'водяной знак масштаб {scale:.3f}')  # для ревьюера
 
 
 def picture_fill(slide, ctx, path, x, y, w, h, radius=6, focus=(0.5, 0.4), ellipse=False):
