@@ -529,6 +529,42 @@ def place_icon(slide, lib, name, target, prs):
     return True
 
 
+def icon_png(lib, name, px=600):
+    """Иконка библиотеки одной картинкой RGBA (для водяных знаков, которые обрезаются краем метки).
+    None — если в иконке есть векторные фигуры: их без PowerPoint не нарисовать."""
+    if name not in lib:
+        return None
+    _, (shapes, (bx, by, bw, bh)) = lib[name]
+    k = px / max(bw, bh)
+    canvas = Image.new('RGBA', (max(1, round(bw * k)), max(1, round(bh * k))), (0, 0, 0, 0))
+
+    def draw(items, tf):
+        for sh in items:
+            t = stype(sh)
+            x, y, w, h = tf(sh.left / E, sh.top / E, sh.width / E, sh.height / E)
+            if t == 6:
+                xf = sh._element.find('{%s}grpSpPr/{%s}xfrm' % (NS['p'], NS['a']))
+                cho, che = xf.find('{%s}chOff' % NS['a']), xf.find('{%s}chExt' % NS['a'])
+                cx, cy = int(cho.get('x')) / E, int(cho.get('y')) / E
+                cw, ch = max(1e-6, int(che.get('cx')) / E), max(1e-6, int(che.get('cy')) / E)
+
+                def sub(a, b, c, d, x=x, y=y, w=w, h=h, cx=cx, cy=cy, cw=cw, ch=ch):
+                    return x + (a - cx) * w / cw, y + (b - cy) * h / ch, c * w / cw, d * h / ch
+                if not draw(sh.shapes, sub):
+                    return False
+            elif t == 13:
+                im = Image.open(io.BytesIO(sh.image.blob)).convert('RGBA')
+                W, H = im.size
+                im = im.crop((int(sh.crop_left * W), int(sh.crop_top * H),
+                              int(W * (1 - sh.crop_right)), int(H * (1 - sh.crop_bottom))))
+                size = (max(1, round(w * k)), max(1, round(h * k)))
+                canvas.alpha_composite(im.resize(size, Image.LANCZOS), (round((x - bx) * k), round((y - by) * k)))
+            else:
+                return False
+        return True
+    return canvas if draw(shapes, lambda *v: v) else None
+
+
 def next_id(slide):
     ids = [int(x) for x in xp(slide.shapes._spTree, './/p:cNvPr/@id')]
     return max(ids + [1]) + 1

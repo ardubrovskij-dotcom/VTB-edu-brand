@@ -261,6 +261,41 @@ def icon(slide, ctx, name, x, y, size, where, white=False, alpha=None):
                 blip.append(parse_xml(f'<a:alphaModFix xmlns:a="{A}" amt="{int(alpha * 100000)}"/>'))
 
 
+def watermark(slide, ctx, name, label, where, muted=False, opacity=0.45):
+    """Водяной знак метки (как в макете автора): крупная белая полупрозрачная иконка в правом нижнем углу,
+    высотой со строку, уходит под обрез — обрезана краем метки. Рисуется картинкой, обрезанной по метке:
+    группу иконки в PowerPoint обрезать нельзя, и она вылезала бы на соседнюю строку и сноску."""
+    import io
+    from PIL import Image
+    lx, ly, lw, lh = label
+    size = max(80, min(140, lh * 1.05))
+    im = B().icon_png(ctx['lib'], name, px=int(size * 4))
+    if im is None:  # в иконке есть векторные фигуры — обычная иконка целиком внутри метки
+        ws = min(88, lh - 12)
+        icon(slide, ctx, name, lx + lw - ws - 8, ly + lh - ws - 6, ws, where, white=True, alpha=0.35)
+        return
+    w = size * im.width / im.height if im.height >= im.width else size
+    h = size if im.height >= im.width else size * im.height / im.width
+    x = lx + lw - w * 1.04          # правый край чуть внутри метки
+    y = ly + lh * 0.28             # низ уходит под обрез
+    a = im.getchannel('A').point(lambda v: int(v * opacity))
+    white = Image.new('RGBA', im.size, (255, 255, 255, 0))
+    white.putalpha(a)
+    # видимая часть — пересечение с меткой
+    vx0, vy0 = max(x, lx), max(y, ly)
+    vx1, vy1 = min(x + w, lx + lw), min(y + h, ly + lh)
+    if vx1 - vx0 < 4 or vy1 - vy0 < 4:
+        return
+    kx, ky = im.width / w, im.height / h
+    crop = white.crop((int((vx0 - x) * kx), int((vy0 - y) * ky), int((vx1 - x) * kx), int((vy1 - y) * ky)))
+    buf = io.BytesIO()
+    crop.save(buf, 'PNG')
+    buf.seek(0)
+    pic = slide.shapes.add_picture(buf, Emu(int(vx0 * E)), Emu(int(vy0 * E)), Emu(int((vx1 - vx0) * E)),
+                                   Emu(int((vy1 - vy0) * E)))
+    pic.name = f'Водяной знак {name}'
+
+
 def picture_fill(slide, ctx, path, x, y, w, h, radius=6, focus=(0.5, 0.4), ellipse=False):
     pic = slide.shapes.add_picture(path, Emu(int(x * E)), Emu(int(y * E)), Emu(int(w * E)), Emu(int(h * E)))
     B().put_image(slide, pic, path, focus=focus)
@@ -506,14 +541,8 @@ def h_rows(slide, s, ctx, where):
             rect(slide, X0, y, lw + 6, h, grad=grad)
         # правый край метки прямой: накрываем скругление серой полосой
         cover = rect(slide, X0 + lw, y, 6, h, fill=CARD, radius=0)
-        if it.get('icon'):  # водяной знак внутри метки: в правом нижнем углу, не выходит за строку
-            ws = min(88, h - 12)
-            icon(slide, ctx, it['icon'], X0 + lw - ws - 8, y + h - ws - 6, ws, where, white=not muted, alpha=0.35)
-            if muted:  # синяя иконка тоже полупрозрачная
-                for blip in slide.shapes[-1]._element.iter('{%s}blip' % A):
-                    for ext in blip.findall('{%s}extLst' % A):
-                        blip.remove(ext)
-                    blip.append(parse_xml(f'<a:alphaModFix xmlns:a="{A}" amt="30000"/>'))
+        if it.get('icon'):
+            watermark(slide, ctx, it['icon'], (X0, y, lw, h), where, muted)
         text(slide, X0 + 16, y + pad, lw - 110, h - 2 * pad, it.get('title', ''), 14,
              ACCENT[ctx['dir_no']] if muted else 'FFFFFF', pitch=17)
         pts = it.get('points') or []

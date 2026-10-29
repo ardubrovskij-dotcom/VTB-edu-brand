@@ -113,7 +113,7 @@ def convert(prs, deck):
             if sh.is_placeholder and sh.placeholder_format.type == 13:
                 el.getparent().remove(el)  # номер слайда — в подписи прототипа
                 continue
-            if el.xpath('.//a:alphaModFix'):  # водяной знак — в прототипе не нужен
+            if el.xpath('.//a:alphaModFix') or sh.name.startswith('Водяной знак'):  # в прототипе не нужен
                 el.getparent().remove(el)
                 continue
             label = 'фото'
