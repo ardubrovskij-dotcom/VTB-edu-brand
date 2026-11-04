@@ -124,17 +124,20 @@ def h_hosts(slide, s, ctx, where):
     """Приветствие: название эфира, дата, крупная надпись «Роли» и карточки ведущих (фото, имя, о себе, роль, почта)."""
     clear_slide(slide)
     t = next((p for p in slide.placeholders if p.placeholder_format.type == 1), None)
-    if t is not None:
+    if t is not None and s.get('date'):
         t._element.getparent().remove(t._element)
     col = accent(ctx)
-    title = s.get('title', '')
-    ts, _ = fit_size(ctx, title, 44, 740, 110, 1.1, floor=TITLE)
-    tn = lines(ctx, title, ts, 740)
-    text(slide, X0, 30, 740, tn * ts * 1.1, title, ts, col, pitch=ts * 1.1, name='Название')
-    y = 30 + tn * ts * 1.1 + 6
-    if s.get('date'):
+    if s.get('date'):  # приветствие без отдельной обложки: крупное название и дата
+        title = s.get('title', '')
+        ts, _ = fit_size(ctx, title, 44, 740, 110, 1.1, floor=TITLE)
+        tn = lines(ctx, title, ts, 740)
+        text(slide, X0, 30, 740, tn * ts * 1.1, title, ts, col, pitch=ts * 1.1, name='Название')
+        y = 30 + tn * ts * 1.1 + 6
         text(slide, X0, y, 740, 30, s['date'], BODY, MUTED, name='Дата')
         y += 34
+    else:  # после обложки: обычный заголовок слайда
+        s2 = dict(s)
+        y = header(slide, s2, ctx, where, size=TITLE, max_lines=1, width=760)
     its = items_of(s)[:2]
     roles = s.get('roles_title', 'Роли')
     text(slide, X0, y + 14, 400, 40, roles, 32, col, bold=True, name='Роли')
@@ -145,7 +148,7 @@ def h_hosts(slide, s, ctx, where):
     for k, it in enumerate(its):
         x = X0 + k * (w + 10)
         rect(slide, x, top, w, h)
-        ph = min(130, h * 0.47)
+        ph = min(150, h * 0.47)
         pw = ph * 0.9
         frame(slide, ctx, x + 18, top + 18, pw, ph, 'фото', where, it.get('photo'), name='Фото ведущего')
         tx = x + 18 + pw + 16

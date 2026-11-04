@@ -953,6 +953,9 @@ def set_number(slide, label, ctx):
     ph = next((p for p in slide.placeholders if p.placeholder_format.type == 13), None)
     if ph is None:
         return
+    if label == '':  # слайд без номера (обложка)
+        ph._element.getparent().remove(ph._element)
+        return
     tf = ph.text_frame
     tf.text = label
     for p in tf.paragraphs:

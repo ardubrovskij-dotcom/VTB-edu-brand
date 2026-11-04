@@ -149,7 +149,7 @@ def convert(prs, deck):
         lab = slide.shapes.add_textbox(Emu(30 * E), Emu(518 * E), Emu(600 * E), Emu(14 * E))
         r = lab.text_frame.paragraphs[0].add_run()
         num = deck.get('slides', [])[no - 1].get('number', no) if no <= len(names) else no
-        r.text = f'прототип · слайд {num} · макет {names[no - 1] if no <= len(names) else ""}'
+        r.text = f'прототип · {"без номера" if num == "" else f"слайд {num}"} · макет {names[no - 1] if no <= len(names) else ""}'
         r.font.size = Pt(9)
         r.font.color.rgb = RGBColor.from_string('9AA1AD')
         lab.name = 'Прототип: подпись'
