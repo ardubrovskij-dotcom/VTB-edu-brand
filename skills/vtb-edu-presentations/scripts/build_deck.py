@@ -941,8 +941,29 @@ def fill_house(slide, spec, s, ctx, where):
                 else:
                     ctx['report'].append(f'{where}: портрет «{p}» не найден')
     house.HOUSE[spec['house']](slide, s, ctx, where)
+    if s.get('number') is not None:
+        set_number(slide, str(s['number']), ctx)
     if s.get('notes'):
         set_notes(slide, s['notes'])
+
+
+def set_number(slide, label, ctx):
+    """Номер слайда текстом («9а» — кадр слайда 9 сценария) вместо автонумерации; крупнее, чтобы был виден в
+    углу при показе экрана."""
+    ph = next((p for p in slide.placeholders if p.placeholder_format.type == 13), None)
+    if ph is None:
+        return
+    if label == '':  # слайд без номера (обложка)
+        ph._element.getparent().remove(ph._element)
+        return
+    tf = ph.text_frame
+    tf.text = label
+    for p in tf.paragraphs:
+        p.alignment = 3  # по правому краю
+        for r in p.runs:
+            r.font.size = Pt(14)
+            r.font.color.rgb = RGBColor.from_string('6B7683')
+    ph.left, ph.top, ph.width, ph.height = Emu(870 * E), Emu(508 * E), Emu(60 * E), Emu(22 * E)
 
 
 def set_notes(slide, text):
@@ -1270,7 +1291,7 @@ def main():
         fixed = review.fix_hanging(prs)
         if sum(fixed.values()):
             prs.save(fn)
-        rv = review.Review(Presentation(fn)).run()
+        rv = review.Review(Presentation(fn), **(review.SCREEN if deck.get('screen') else {})).run()
         print('ревью (scripts/review.py):')
         print(rv.report(+fixed, True))
         errors = sum(1 for i in rv.items if i['level'] == 'ОШИБКА')

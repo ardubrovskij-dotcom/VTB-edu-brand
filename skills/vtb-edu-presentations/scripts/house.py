@@ -847,7 +847,7 @@ def h_title(slide, s, ctx, where):
         tree = slide.shapes._spTree
         tree.remove(pic._element)
         tree.insert(2, pic._element)
-    size0 = 48 if chapter else 28
+    size0 = s.get('size') or (48 if chapter else 28)  # size — крупнее для эфира (заголовок от 36 pt)
     # название не доходит до фигуры на портрете: зазор не меньше 16 pt
     tw = 428 if chapter else min(445, figure_left - 16 - 35)
     sz, ok = fit_size(ctx, title, size0, tw, (2 if chapter else 3) * size0 * 1.07, 1.07, floor=20, caps=False)
@@ -878,7 +878,9 @@ def h_title(slide, s, ctx, where):
     note = [x for x in (s.get('note'), s.get('date')) if x]
     if note:
         col = ACCENT[ctx['dir_no']]
-        tb = text(slide, 41, 473, 330, 34, note, 12.5, INK, pitch=15)  # вровень с синей чертой (правка автора)
+        ns = s.get('note_size', 12.5)  # для эфира крупнее (от 20 pt)
+        ny = 473 if ns <= 12.5 else 507 - len(note) * ns * 1.2
+        tb = text(slide, 41, ny, 420, len(note) * ns * 1.2 + 4, note, ns, INK, pitch=ns * 1.2)  # вровень с синей чертой
         tb.text_frame.paragraphs[0].runs[0].font.color.rgb = RGBColor.from_string(col)
         if len(note) > 1 and s.get('date_muted'):
             tb.text_frame.paragraphs[1].runs[0].font.color.rgb = RGBColor.from_string('ACB6C3')
@@ -888,3 +890,9 @@ HOUSE = {
     'cards': h_cards, 'stats': h_stats, 'speakers': h_speakers, 'features': h_features, 'rows': h_rows,
     'datatable': h_table, 'course': h_course, 'team': h_team, 'title': h_title, 'chapter': h_title,
 }
+
+
+# макеты для эфира и показа экрана — scripts/screen.py
+import screen  # noqa: E402
+
+HOUSE.update(screen.SCREEN)

@@ -36,9 +36,10 @@ ICON_MAX = 40          # фигура меньше — иконка
 DECOR_MAX = 100        # группа меньше — цельный значок (иконка, водяной знак): внутрь не заходим
 ACRONYMS = {'ВТБ', 'МСФО', 'ДПО', 'АНО', 'ДО', 'РФ', 'LMS', 'IFRS', 'IAS', 'ACCA', 'CIMA', 'ЦФА', 'КВ', 'АХР',
             'ДВОПиИ', 'НМА', 'НИОКР', 'KPI', 'ECL', 'FVTPL', 'FVOCI', 'CoR', 'TBD', 'ПАО', 'РОСТ', 'ШОиФД', 'ВШМ',
-            'СПбГУ', 'ОАЭ', 'HR', 'IT', 'B2B', 'ESG', 'ИИ', 'AI', 'MBA', 'EMBA', 'QR', 'PDF', 'PPTX', 'TBC'}
-STUBS = re.compile(r'(?<![\w])(X{2,}|X,X|[xх]{2,}|[xх],[xх])(?![\w])|Фамилия Имя|Образец текста|\bTBD\b|ПРОВЕРИТЬ|'
-                   r'ЗАГЛУШК|[Ll]orem', re.I)
+            'СПбГУ', 'ОАЭ', 'HR', 'IT', 'B2B', 'ESG', 'ИИ', 'AI', 'MBA', 'EMBA', 'QR', 'PDF', 'PPTX', 'TBC', 'HTML', 'CSS', 'URL', 'API', 'PPTX', 'DOCX', 'XLSX'}
+STUBS = re.compile(r'(?<![\w])(?:X{2,}|X,X|[xх]{2,}|[xх],[xх])(?![\w])|Фамилия Имя|Образец текста|\bTBD\b|'
+                   r'(?-i:ПРОВЕРИТЬ|ЗАГЛУШК)|[Ll]orem|\[[^\]]{1,80}\]', re.I)  # […] — место для данных автора
+SCREEN = dict(min_size=20, min_title=36, max_words=40, bottom=500)  # требования к показу экрана в эфире
 COVER_LAYOUTS = re.compile(r'Обложк|Раздел|Титул|Section|Title Slide', re.I)
 
 
@@ -408,10 +409,13 @@ def transparent(sh):
 
 # ---------------------------------------------------------------- ревью
 class Review:
-    def __init__(self, prs):
+    def __init__(self, prs, min_size=9, min_title=20, max_words=None, bottom=BOTTOM):
         self.prs = prs
         self.fit = Fitter()
         self.items = []
+        # показ экрана (эфир): текст не мельче min_size, заголовок не мельче min_title, слов на слайде до max_words
+        self.min_size, self.min_title, self.max_words = min_size, min_title, max_words
+        self.bottom = bottom  # в эфире рамки скриншотов (60 % площади) доходят до низа сетки, 500 pt
         self.sw, self.sh = prs.slide_width / E, prs.slide_height / E
         self.house = True  # слайд фирменного стиля (макет «Таблица» — шапка, логотип, номер)
 
@@ -517,6 +521,12 @@ class Review:
                 self.add(no, 'ВНИМАНИЕ', 'заглушка', f'в заметках: {nt[:120]}')
         self._texts = texts
         self.overlaps(no, slide, texts, icons, photos, decor)
+        if self.max_words:
+            prompt = any(sh.name in ('Запрос', 'Часть запроса') for sh, _ in texts)
+            words = sum(len(re.findall(r'[\w«»-]+', sh.text_frame.text)) for sh, _ in texts
+                        if not (sh.is_placeholder and sh.placeholder_format.type == 13))
+            if words > self.max_words and not prompt:
+                self.add(no, 'ВНИМАНИЕ', 'объём', f'{words} слов на слайде — больше {self.max_words}; сократить')
         self.picture_checks(no, photos, cards)
         self.icon_checks(no, icons, cards)
         for d, box in decor:  # водяные знаки и крупные значки — внутри своей карточки
@@ -552,7 +562,7 @@ class Review:
                 rpr = r._r.find('{%s}rPr' % A)
                 if rpr is not None and rpr.get('cap') in ('all', 'small'):
                     self.add(no, 'ОШИБКА', 'капс', f'«{r.text[:30]}»: включены прописные (cap) — выключить')
-                for wd in re.findall(r'[A-ZА-ЯЁ]{4,}[A-ZА-ЯЁ-]*', r.text):
+                for wd in re.findall(r'[A-ZА-ЯЁ]{4,}(?:-[A-ZА-ЯЁ]+)*', r.text):
                     if wd not in ACRONYMS and len(wd) > 4:
                         self.add(no, 'ОШИБКА', 'капс', f'слово прописными «{wd}» — набрать обычным регистром')
         if not sizes:
@@ -564,14 +574,15 @@ class Review:
             titles.append((no, main, self.title_colour(sh)))
             if n > TITLE_MAX_LINES:
                 self.add(no, 'ОШИБКА', 'заголовок', f'заголовок {n} строк при пределе {TITLE_MAX_LINES} — сократить')
-            if main < 20:
-                self.add(no, 'ОШИБКА', 'кегль', f'заголовок {main:g} pt — слишком мелко, попросить автора сократить')
+            if main < self.min_title:
+                self.add(no, 'ОШИБКА', 'кегль', f'заголовок {main:g} pt при минимуме {self.min_title} — слишком мелко, '
+                                                'попросить автора сократить')
             if not xp(sh._element, './/a:bodyPr/a:noAutofit'):
                 self.add(no, 'ВНИМАНИЕ', 'кегль', 'в заголовке не выключен автоподбор: после правки PowerPoint '
                                                   'может сжать его мельче остальных (нужен noAutofit)')
-        elif small < 9 and box[1] < 470:
-            self.add(no, 'ОШИБКА', 'кегль', f'«{sh.text_frame.text[:30]}…» {small:g} pt — мельче 9 pt не читается; '
-                                            'попросить сократить текст')
+        elif small < self.min_size and (box[1] < 470 or self.min_size > 9) and sh.name != 'Подпись рамки':
+            self.add(no, 'ОШИБКА', 'кегль', f'«{sh.text_frame.text[:30]}…» {small:g} pt — мельче {self.min_size} pt '
+                                            'не читается; попросить сократить текст')
         # роль для единого кегля по колоде
         role = sh.name if sh.name in ('Цифра', 'Подпись', 'Имя', 'Должность', 'Сноска', 'Подзаголовок', 'Модули',
                                       'Особенности', 'Описание', 'Подпись группы') else None
@@ -703,8 +714,8 @@ class Review:
             self.add(no, 'ВНИМАНИЕ', 'поля', f'«{sh.name}» правее поля: {x + w:.0f} при {RIGHT}')
         if y + h > GRID_BOTTOM + 2 and y < 480:
             self.add(no, 'ОШИБКА', 'поля', f'«{sh.name}» ниже сетки шаблона: {y + h:.0f} при {GRID_BOTTOM}')
-        elif y + h > BOTTOM + 3 and y < 480 and self.house:
-            self.add(no, 'ОШИБКА', 'поля', f'«{sh.name}» ниже нижней границы фирменного стиля: {y + h:.0f} при {BOTTOM}')
+        elif y + h > self.bottom + 3 and y < 480 and self.house:
+            self.add(no, 'ОШИБКА', 'поля', f'«{sh.name}» ниже нижней границы фирменного стиля: {y + h:.0f} при {self.bottom}')
 
     def alignment(self, no, shapes, what):
         for i, edge in ((0, 'левые'), (1, 'верхние')):
@@ -791,13 +802,15 @@ def main():
     ap.add_argument('pptx')
     ap.add_argument('--fix', metavar='OUT', help='сохранить копию с неразрывными пробелами после предлогов')
     ap.add_argument('--json', action='store_true')
+    ap.add_argument('--screen', action='store_true',
+                    help='показ экрана (эфир): текст от 20 pt, заголовок от 36 pt, до 40 слов на слайде')
     a = ap.parse_args()
     prs = Presentation(a.pptx)
     hanging = fix_hanging(prs) if a.fix else count_hanging(prs)
     if a.fix:
         prs.save(a.fix)
         prs = Presentation(a.fix)
-    rv = Review(prs).run()
+    rv = Review(prs, **(SCREEN if a.screen else {})).run()
     if a.json:
         print(json.dumps(dict(items=rv.items, hanging=dict(hanging)), ensure_ascii=False, indent=1))
     else:
