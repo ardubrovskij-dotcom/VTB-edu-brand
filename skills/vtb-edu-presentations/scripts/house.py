@@ -888,3 +888,9 @@ HOUSE = {
     'cards': h_cards, 'stats': h_stats, 'speakers': h_speakers, 'features': h_features, 'rows': h_rows,
     'datatable': h_table, 'course': h_course, 'team': h_team, 'title': h_title, 'chapter': h_title,
 }
+
+
+# макеты для эфира и показа экрана — scripts/screen.py
+import screen  # noqa: E402
+
+HOUSE.update(screen.SCREEN)

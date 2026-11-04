@@ -61,6 +61,7 @@ description: Создаёт редактируемые презентации Po
 | форматы, тарифы, состав работ списками | `rows` |
 | сроки, шаги, сравнение | `datatable` |
 | страница курса или модуля | `course` |
+| **эфир, вебинар, показ экрана**: крупный текст, запросы, рамки скриншотов | `"screen": true` и макеты `hosts`, `numbered`, `tiles`, `prompt`, `prompt-compare`, `screenshot`, `split`, `statement`, `before-after`, `chat`, `columns`, `equation`, `stack`, `list-process`, `questions` (`layouts.md`, «Эфир») |
 | контакты | `team` |
 | диаграммы | `charts2`, `donut` (шаблон) |
 | схемы, матрица, таймлайн | `scheme`, `tree`, `venn`, `matrix`, `timeline` (шаблон) |

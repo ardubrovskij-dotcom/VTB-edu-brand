@@ -31,6 +31,22 @@ LAYOUTS = {
     'datatable': dict(proto=36, house='datatable'),
     'course': dict(proto=36, house='course'),
     'team': dict(proto=36, house='team'),
+    # ---------- эфир и показ экрана: крупный текст (заголовок 36, текст 24, запросы 20 pt) — scripts/screen.py
+    'hosts': dict(proto=36, house='hosts'),
+    'numbered': dict(proto=36, house='numbered'),
+    'tiles': dict(proto=36, house='tiles'),
+    'prompt': dict(proto=36, house='prompt'),
+    'prompt-compare': dict(proto=36, house='prompt-compare'),
+    'screenshot': dict(proto=36, house='screenshot'),
+    'split': dict(proto=36, house='split'),
+    'statement': dict(proto=36, house='statement'),
+    'before-after': dict(proto=36, house='before-after'),
+    'chat': dict(proto=36, house='chat'),
+    'columns': dict(proto=36, house='columns'),
+    'equation': dict(proto=36, house='equation'),
+    'stack': dict(proto=36, house='stack'),
+    'list-process': dict(proto=36, house='list-process'),
+    'questions': dict(proto=36, house='questions'),
 
     # ---------- обложки ----------
     'cover': dict(proto=9, fields={'title': 0, 'subtitle': 12, 'meta': 11}, portrait='Image'),
