@@ -886,9 +886,104 @@ def h_title(slide, s, ctx, where):
             tb.text_frame.paragraphs[1].runs[0].font.color.rgb = RGBColor.from_string('ACB6C3')
 
 
+def h_chart(slide, s, ctx, where):
+    """Диаграмма с выводом (фирменный стиль): слева родная диаграмма PowerPoint цветом направления с подписями
+    значений, над ней подпись; справа плитка с цифрой и акцентная плитка с выводом. Данные правятся в Excel."""
+    from pptx.chart.data import CategoryChartData
+    from pptx.enum.chart import XL_CHART_TYPE, XL_LABEL_POSITION, XL_LEGEND_POSITION
+    clear_slide(slide)
+    hb = header(slide, s, ctx, where)
+    data = s.get('chart') or {}
+    cats = data.get('categories') or []
+    series = data.get('series') or []
+    stat, insight = s.get('stat'), s.get('insight')
+    side = 300 if (stat or insight) else 0
+    cw = W - side - (GAP if side else 0)
+    h = s.get('height') or 300
+    top = content_top(slide, s, ctx, where, h, hb)
+    col = ACCENT[ctx['dir_no']]
+    ty = top
+    if data.get('title'):
+        text(slide, X0, top, cw, 18, data['title'], 13, MUTED, name='Подпись диаграммы')
+        ty += 24
+    cd = CategoryChartData()
+    cd.categories = cats
+    for se in series:
+        cd.add_series(se.get('name', ''), se.get('values', []))
+    kind = {'column': XL_CHART_TYPE.COLUMN_CLUSTERED, 'bar': XL_CHART_TYPE.BAR_CLUSTERED,
+            'line': XL_CHART_TYPE.LINE_MARKERS}[data.get('type', 'column')]
+    gf = slide.shapes.add_chart(kind, Emu(int(X0 * E)), Emu(int(ty * E)), Emu(int(cw * E)),
+                                Emu(int((top + h - ty) * E)), cd)
+    gf.name = 'Диаграмма'
+    ch = gf.chart
+    ch.has_title = False  # заголовок — в подписи над диаграммой, а не название ряда
+    ch.font.name = FONT
+    ch.font.size = Pt(12)
+    ch.font.color.rgb = RGBColor.from_string(TEXT)
+    ch.has_legend = len(series) > 1
+    if ch.has_legend:
+        ch.legend.position = XL_LEGEND_POSITION.TOP
+        ch.legend.include_in_layout = False
+    plot = ch.plots[0]
+    if kind != XL_CHART_TYPE.LINE_MARKERS:
+        plot.gap_width = 55
+        plot.overlap = -10
+    plot.has_data_labels = True
+    dl = plot.data_labels
+    dl.font.size = Pt(13)
+    dl.font.name = FONT_DEMI
+    dl.font.color.rgb = RGBColor.from_string(INK)
+    dl.number_format = data.get('number_format', 'General')
+    dl.number_format_is_linked = False
+    if kind != XL_CHART_TYPE.LINE_MARKERS:
+        dl.position = XL_LABEL_POSITION.OUTSIDE_END
+    palette = [col, '86BFF5', 'ACB6C3', '00AAFF']
+    for k, ser in enumerate(plot.series):
+        fill = ser.format.fill if kind != XL_CHART_TYPE.LINE_MARKERS else None
+        if fill is not None:
+            fill.solid()
+            fill.fore_color.rgb = RGBColor.from_string(palette[k % len(palette)])
+        else:
+            ser.format.line.color.rgb = RGBColor.from_string(palette[k % len(palette)])
+            ser.format.line.width = Pt(2.5)
+    va = ch.value_axis
+    va.has_major_gridlines = False
+    va.visible = False
+    ca = ch.category_axis
+    ca.tick_labels.font.size = Pt(12)
+    ca.tick_labels.font.color.rgb = RGBColor.from_string(TEXT)
+    ca.format.line.color.rgb = RGBColor.from_string('DCE0EB')
+    ca.has_major_gridlines = False
+    if not side:
+        return
+    x = X0 + cw + GAP
+    pad = 19
+    sh_ = h if not (stat and insight) else (h - GAP) * 0.55
+    if stat:
+        rect(slide, x, top, side, sh_)
+        val = str(stat.get('value', ''))
+        vs = B().capped('цифра', VALUE_SIZE)
+        text(slide, x + pad, top + 18, side - 2 * pad, vs * 1.15, val, vs, col, small=(vs * 0.45, SMALL_IN_VALUE),
+             pitch=vs * 1.15, name='Цифра')
+        if stat.get('text'):
+            ty2 = top + 18 + vs * 1.15 + 8
+            ts, ok = fit_size(ctx, stat['text'], 14, side - 2 * pad, top + sh_ - 16 - ty2, 17 / 14, role='подпись цифры')
+            text(slide, x + pad, ty2, side - 2 * pad, top + sh_ - 16 - ty2, stat['text'], ts, TEXT, anchor='bottom',
+                 pitch=ts * 17 / 14, name='Подпись')
+    if insight:
+        iy = top + (sh_ + GAP if stat else 0)
+        ih = top + h - iy
+        rect(slide, x, iy, side, ih, grad=GRAD[ctx['dir_no']])
+        isz, ok = fit_size(ctx, insight, 16, side - 2 * pad, ih - 2 * pad, 19 / 16, role='вывод')
+        if not ok:
+            warn(ctx, where, 'ПЕРЕПОЛНЕНИЕ — вывод не помещается в плитку, сократите')
+        text(slide, x + pad, iy + pad, side - 2 * pad, ih - 2 * pad, insight, isz, 'FFFFFF', bold=True, anchor='bottom',
+             pitch=isz * 19 / 16, name='Вывод')
+
+
 HOUSE = {
     'cards': h_cards, 'stats': h_stats, 'speakers': h_speakers, 'features': h_features, 'rows': h_rows,
-    'datatable': h_table, 'course': h_course, 'team': h_team, 'title': h_title, 'chapter': h_title,
+    'datatable': h_table, 'chart': h_chart, 'course': h_course, 'team': h_team, 'title': h_title, 'chapter': h_title,
 }
 
 

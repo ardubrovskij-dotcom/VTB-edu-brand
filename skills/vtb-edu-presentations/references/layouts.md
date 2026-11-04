@@ -52,6 +52,7 @@
 | `features` | `card_title`, `card_icon` | 6 × `icon`, `text` |
 | `rows` | — | 2–4 × `title`, `icon` (водяной знак), `points` (список), `columns` (1 или 2), `muted: true` — серая метка с синим текстом, `group` — подпись группы над строкой («Базовый формат», «Дополнительно») |
 | `datatable` | `table`: `columns`, `rows`, `highlight` (номера выделенных строк, по умолчанию `[0]`), `widths` (доли); `align: "top"` — таблица сразу под заголовком | — |
+| `chart` | `chart`: `title` (подпись над диаграммой), `categories`, `series` (`name`, `values`), `type` (`column` · `bar` · `line`), `number_format`; справа `stat` (`value`, `text`) и `insight` (вывод на градиенте); `height` | — |
 | `course` | `title` (название курса), `lead` (описание, 12 pt во всю ширину), `duration` («24 ак. ч»), `modules` («**Тема.** пояснение» — нумеруются сами), `features` (пункты карточки «Особенности», `**выделение**`), `modules_title`, `features_title` (необяз.) | — |
 | `team` | `title` (по умолчанию «Контакты») | до 3 × `name`, `role`, `email`, `phone`, `photo` (необяз.) |
 
