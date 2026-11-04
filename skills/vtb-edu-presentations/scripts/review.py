@@ -37,8 +37,8 @@ DECOR_MAX = 100        # группа меньше — цельный значо
 ACRONYMS = {'ВТБ', 'МСФО', 'ДПО', 'АНО', 'ДО', 'РФ', 'LMS', 'IFRS', 'IAS', 'ACCA', 'CIMA', 'ЦФА', 'КВ', 'АХР',
             'ДВОПиИ', 'НМА', 'НИОКР', 'KPI', 'ECL', 'FVTPL', 'FVOCI', 'CoR', 'TBD', 'ПАО', 'РОСТ', 'ШОиФД', 'ВШМ',
             'СПбГУ', 'ОАЭ', 'HR', 'IT', 'B2B', 'ESG', 'ИИ', 'AI', 'MBA', 'EMBA', 'QR', 'PDF', 'PPTX', 'TBC', 'HTML', 'CSS', 'URL', 'API', 'PPTX', 'DOCX', 'XLSX'}
-STUBS = re.compile(r'(?<![\w])(X{2,}|X,X|[xх]{2,}|[xх],[xх])(?![\w])|Фамилия Имя|Образец текста|\bTBD\b|ПРОВЕРИТЬ|'
-                   r'ЗАГЛУШК|[Ll]orem', re.I)
+STUBS = re.compile(r'(?<![\w])(?:X{2,}|X,X|[xх]{2,}|[xх],[xх])(?![\w])|Фамилия Имя|Образец текста|\bTBD\b|'
+                   r'(?-i:ПРОВЕРИТЬ|ЗАГЛУШК)|[Ll]orem|\[[^\]]{1,80}\]', re.I)  # […] — место для данных автора
 SCREEN = dict(min_size=20, min_title=36, max_words=40, bottom=500)  # требования к показу экрана в эфире
 COVER_LAYOUTS = re.compile(r'Обложк|Раздел|Титул|Section|Title Slide', re.I)
 
