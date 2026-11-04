@@ -30,6 +30,7 @@ LAYOUTS = {
     'rows': dict(proto=36, house='rows'),
     'datatable': dict(proto=36, house='datatable'),
     'course': dict(proto=36, house='course'),
+    'chart': dict(proto=36, house='chart'),
     'team': dict(proto=36, house='team'),
     # ---------- эфир и показ экрана: крупный текст (заголовок 36, текст 24, запросы 20 pt) — scripts/screen.py
     'hosts': dict(proto=36, house='hosts'),
