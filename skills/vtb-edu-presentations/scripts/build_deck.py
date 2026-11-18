@@ -723,12 +723,19 @@ def fill_slide(prs, slide, spec, s, ctx, where):
     # поля
     for name, idx in spec.get('fields', {}).items():
         if s.get(name) not in (None, ''):
+            # заголовок контентных слайдов шаблонных макетов оформляем как фирменный (house.header ниже)
+            if name == 'title' and not spec.get('house') and spec['proto'] > 14 and spec['proto'] != 52:
+                used.add(idx)
+                continue
             lines = None
             if name == 'title' and spec['proto'] > 14 and spec['proto'] != 52:
                 lines = 2
             elif name.endswith('value'):
                 lines = 1  # крупная цифра не переносится, а уменьшается
             put(idx, s[name], name, lines)
+    if s.get('title') and not spec.get('house') and spec['proto'] > 14 and spec['proto'] != 52 \
+            and 'title' in spec.get('fields', {}):
+        house.header(slide, s, ctx, where)
     # текстовые блоки, которые не плейсхолдеры
     for name, prefix in spec.get('textbox', {}).items():
         sh = find_shape(slide, prefix)
@@ -761,6 +768,14 @@ def fill_slide(prs, slide, spec, s, ctx, where):
         if len(given) > len(items):
             report.append(f'{where}: элементов {len(given)}, в макете {len(items)} — лишние отброшены')
         value_proto = next((i['value'] for i in items if i.get('value')), None)
+        # иконки набора ставятся одним размером (медиана рамок прототипа), как в house-макетах:
+        # иначе рамки 40–63 pt дают визуально разные иконки в одинаковых карточках
+        def proto_icons(it):
+            return [x for x in slide.shapes if not x.is_placeholder and stype(x) in (6, 13)
+                    and center_in(x, it['box']) and max(bbox(x)[2:]) <= 62 and not x.name.startswith('Иконка')]
+        sides = [max(bbox(ic)[2:]) for it in items[:len(given)] if it.get('icon')
+                 for ic in proto_icons(it)]
+        icon_side = sorted(sides)[len(sides) // 2] if sides else None
         for k, it in enumerate(items):
             box = it['box']
             if k >= len(given):
@@ -788,15 +803,14 @@ def fill_slide(prs, slide, spec, s, ctx, where):
                     else:
                         borrow_value(slide, items, idx, box, g['value'], ctx, f'{where}/value{k + 1}')
             # иконка: заменить, убрать или оставить из прототипа
-            icons = [x for x in slide.shapes if not x.is_placeholder and stype(x) in (6, 13)
-                     and center_in(x, box) and max(bbox(x)[2:]) <= 62 and not x.name.startswith('Иконка')]
+            icons = proto_icons(it)
             if it.get('icon'):
                 want = g.get('icon')
                 has_value = g.get('value') not in (None, '')
                 for ic in icons:
                     if want:
                         t = bbox(ic)
-                        side = max(t[2], t[3])
+                        side = icon_side or max(t[2], t[3])
                         target = (t[0] + t[2] / 2 - side / 2, t[1] + t[3] / 2 - side / 2, side, side)
                         if place_icon(slide, lib, want, target, prs):
                             delete(ic)
