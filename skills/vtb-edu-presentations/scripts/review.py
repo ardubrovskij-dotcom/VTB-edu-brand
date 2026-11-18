@@ -36,7 +36,8 @@ ICON_MAX = 40          # фигура меньше — иконка
 DECOR_MAX = 100        # группа меньше — цельный значок (иконка, водяной знак): внутрь не заходим
 ACRONYMS = {'ВТБ', 'МСФО', 'ДПО', 'АНО', 'ДО', 'РФ', 'LMS', 'IFRS', 'IAS', 'ACCA', 'CIMA', 'ЦФА', 'КВ', 'АХР',
             'ДВОПиИ', 'НМА', 'НИОКР', 'KPI', 'ECL', 'FVTPL', 'FVOCI', 'CoR', 'TBD', 'ПАО', 'РОСТ', 'ШОиФД', 'ВШМ',
-            'СПбГУ', 'ОАЭ', 'HR', 'IT', 'B2B', 'ESG', 'ИИ', 'AI', 'MBA', 'EMBA', 'QR', 'PDF', 'PPTX', 'TBC', 'HTML', 'CSS', 'URL', 'API', 'PPTX', 'DOCX', 'XLSX'}
+            'СПбГУ', 'ОАЭ', 'HR', 'IT', 'B2B', 'ESG', 'ИИ', 'AI', 'MBA', 'EMBA', 'QR', 'PDF', 'PPTX', 'TBC', 'HTML', 'CSS', 'URL', 'API', 'PPTX', 'DOCX', 'XLSX',
+            'AARRR', 'LTV', 'CAC', 'ARPU', 'MAU', 'NPS', 'CPL', 'CTR', 'CPM', 'SQL', 'UTM', 'KPI'}
 STUBS = re.compile(r'(?<![\w])(?:X{2,}|X,X|[xх]{2,}|[xх],[xх])(?![\w])|Фамилия Имя|Образец текста|\bTBD\b|'
                    r'(?-i:ПРОВЕРИТЬ|ЗАГЛУШК)|[Ll]orem|\[[^\]]{1,80}\]', re.I)  # […] — место для данных автора
 SCREEN = dict(min_size=20, min_title=36, max_words=40, bottom=500)  # требования к показу экрана в эфире
@@ -449,6 +450,10 @@ class Review:
     # -- слайд
     def slide(self, no, slide, roles, titles):
         cover = bool(COVER_LAYOUTS.search(slide.slide_layout.name or ''))
+        if not cover:  # раздел и обложки с паттерном идут на «Пустом слайде»: узнаём по фону на весь слайд
+            cover = any(stype(sh) == 13 and box[0] <= 1 and box[1] <= 1
+                        and box[2] >= self.sw - 2 and box[3] >= self.sh - 2
+                        for sh, box in walk(slide.shapes))
         self.house = 'Таблица' in (slide.slide_layout.name or '')
         shapes = list(walk(slide.shapes))
         texts, icons, photos, cards, decor = [], [], [], [], []
@@ -468,7 +473,7 @@ class Review:
                         self.add(no, 'ОШИБКА', 'иконка', f'иконка «{sh.name}» с непропорционально толстой обводкой '
                                                          f'({thick:.0%} размера) — линии слились, иконка кривая; '
                                                          'обводку уменьшить вместе с иконкой')
-                if max(w, h) <= ICON_MAX:
+                if max(w, h) <= ICON_MAX or sh.name.startswith('Иконка'):
                     icons.append((sh, box))
                 elif max(w, h) <= DECOR_MAX:
                     decor.append((sh, box))
@@ -690,16 +695,27 @@ class Review:
                 if max(sizes) - min(sizes) > 2:
                     self.add(no, 'ОШИБКА', 'иконка', 'иконки в одинаковых карточках разного размера: '
                                                      + ', '.join(f'{s:.0f}' for s in sizes) + ' pt')
-            # иконки набора выравниваются по центру своей клетки: сравниваем центры, а не края рамок
+            # иконки набора выравниваются по центру своей клетки: сравниваем центры, а не края рамок.
+            # Сравнение — внутри одного ряда: у вертикального списка (одна колонка) центры по y
+            # законно различаются от строки к строке
             offs = [(round(b[0] + b[2] / 2 - c[0]), round(b[1] + b[3] / 2 - c[1])) for _, b, c in g]
-            common = collections.Counter(offs).most_common(1)[0][0]
-            for (ic, b, c), off in zip(g, offs):
-                if abs(off[0] - common[0]) > 2 or abs(off[1] - common[1]) > 2:
-                    self.add(no, 'ОШИБКА', 'иконка', f'иконка «{ic.name}» сдвинута: центр от края карточки {off}, '
-                                                     f'у соседних {common}')
+            rows = collections.defaultdict(list)
+            for item, off in zip(g, offs):
+                rows[round((item[1][1] + item[1][3] / 2) / 8)].append((item, off))
+            for row in rows.values():
+                if len(row) < 2:
+                    continue
+                common = collections.Counter(o for _, o in row).most_common(1)[0][0]
+                for (ic, b, c), off in row:
+                    if abs(off[0] - common[0]) > 2 or abs(off[1] - common[1]) > 2:
+                        self.add(no, 'ОШИБКА', 'иконка', f'иконка «{ic.name}» сдвинута: центр от края карточки {off}, '
+                                                         f'у соседних {common}')
             same = [c for c in cards if (round(c[1][2] / 4), round(c[1][3] / 4)) == key]
             with_icon = {id(c) for _, _, c in g}
-            empty = [c for c in same if not any(inside(b, c[1], 0) for _, b, _ in g)]
+            # ячейка с крупной цифрой (highlights) — не «карточка без иконки»
+            has_text = [c for c in same if any(centre_in(t[1], c[1]) for t in self._texts)]
+            empty = [c for c in same if c not in has_text
+                     and not any(inside(b, c[1], 0) for _, b, _ in g)]
             if empty and len(empty) < len(same):
                 for c, cb in empty:
                     self.add(no, 'ВНИМАНИЕ', 'иконка', f'в карточке ({cb[0]:.0f}, {cb[1]:.0f}) нет иконки, у соседних есть')
